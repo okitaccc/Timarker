@@ -1,5 +1,6 @@
 ﻿using Timarker.Models;
 using Timarker.Services;
+using System.Text.Json;
 
 namespace Timarker;
 
@@ -16,6 +17,9 @@ public sealed class MainForm : Form
 
     private readonly EventStore _store;
     private readonly List<EventItem> _events;
+    private readonly List<PersonProfile> _people;
+    private readonly List<ActivityRecord> _records;
+    private readonly List<NoteItem> _notes;
     private readonly SettingsStore _settingsStore = new();
     private readonly AppSettings _settings;
     private readonly NotifyIcon _notifyIcon;
@@ -23,48 +27,46 @@ public sealed class MainForm : Form
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 30_000 };
     private bool _isHandlingReminders;
 
-    private readonly TextBox _titleBox = new() { PlaceholderText = "例如：明天下午三点开会" };
-    private readonly TextBox _notesBox = new() { PlaceholderText = "备注，可不填", Multiline = true, Height = 72 };
+    private readonly ModernTextBox _titleBox = new() { PlaceholderText = "例如：明天下午三点开会" };
+    private readonly ModernTextBox _notesBox = new() { PlaceholderText = "备注，可不填", Multiline = true, Height = 72 };
     private readonly TagEditor _tagsBox = new();
     private readonly CommonTagPicker _categoryBox = new();
-    private readonly ComboBox _parentBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly ComboBox _typeBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly ComboBox _priorityBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly ComboBox _calendarBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly ComboBox _anniversaryModeBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly TextBox _milestoneDaysBox = new() { PlaceholderText = "例如：10, 100, 365, 520, 1000" };
-    private readonly TextBox _subjectNameBox = new() { PlaceholderText = "例如：妈妈、我们、入职" };
-    private readonly TextBox _relationshipBox = new() { PlaceholderText = "例如：家人、伴侣、工作" };
+    private readonly ComboBox _parentBox = new ModernComboBox();
+    private readonly ComboBox _typeBox = new ModernComboBox();
+    private readonly ComboBox _priorityBox = new ModernComboBox();
+    private readonly ComboBox _calendarBox = new ModernComboBox();
+    private readonly ComboBox _anniversaryModeBox = new ModernComboBox();
+    private readonly ModernTextBox _milestoneDaysBox = new() { PlaceholderText = "例如：10, 100, 365, 520, 1000" };
+    private readonly ModernTextBox _subjectNameBox = new() { PlaceholderText = "例如：妈妈、我们、入职" };
+    private readonly ModernTextBox _relationshipBox = new() { PlaceholderText = "例如：家人、伴侣、工作" };
     private readonly CheckBox _birthdayYearKnownBox = new() { Text = "显示年龄（已知出生年份）", Checked = true, AutoSize = true };
     private readonly CheckBox _birthdayLeapMonthBox = new() { Text = "这是闰月生日", AutoSize = true };
-    private readonly ComboBox _birthdayLeapDayRuleBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ComboBox _birthdayLeapDayRuleBox = new ModernComboBox();
     private readonly Button _ordinaryPurposeButton = PurposeButton("普通事项");
     private readonly Button _recurringPurposeButton = PurposeButton("周期事项");
     private readonly Button _birthdayPurposeButton = PurposeButton("生日");
     private readonly Button _anniversaryPurposeButton = PurposeButton("纪念日");
-    private readonly ComboBox _templateBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly ComboBox _filterBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 120 };
-    private readonly TextBox _searchBox = new() { PlaceholderText = "搜索标题/词条", Width = 140, AutoSize = false };
+    private readonly ComboBox _templateBox = new ModernComboBox();
+    private readonly ComboBox _filterBox = new ModernComboBox { Width = 120 };
+    private readonly ModernTextBox _searchBox = new() { PlaceholderText = "搜索标题/词条", Width = 140, AutoSize = false };
     private readonly CheckBox _hasStartBox = new() { Text = "设置开始时间", Checked = true };
     private readonly DateTimePicker _startDateBox = new() { Format = DateTimePickerFormat.Custom, CustomFormat = "yyyy-MM-dd", Width = 130 };
-    private readonly Button _chooseDateButton = new() { Text = "选择日期与时间", Height = 40, FlatStyle = FlatStyle.Flat };
-    private readonly Button _startDateButton = new() { Width = 178, Height = 36, FlatStyle = FlatStyle.Flat, TabStop = false };
-    private readonly NumericUpDown _startHourBox = TimeNumber(23);
-    private readonly NumericUpDown _startMinuteBox = TimeNumber(59);
+    private readonly Button _chooseDateButton = new ModernButton() { Text = "选择日期与时间", Height = 40 };
+    private readonly Button _startDateButton = new ModernButton() { Width = 178, Height = 36, TabStop = false };
+    private readonly ModernNumericUpDown _startHourBox = TimeNumber(23);
+    private readonly ModernNumericUpDown _startMinuteBox = TimeNumber(59);
     private readonly CheckBox _hasDeadlineBox = new() { Text = "设置截止时间" };
     private readonly DateTimePicker _deadlineDateBox = new() { Format = DateTimePickerFormat.Custom, CustomFormat = "yyyy-MM-dd", Width = 130 };
-    private readonly Button _deadlineDateButton = new() { Width = 178, Height = 36, FlatStyle = FlatStyle.Flat, TabStop = false };
-    private readonly NumericUpDown _deadlineHourBox = TimeNumber(23);
-    private readonly NumericUpDown _deadlineMinuteBox = TimeNumber(59);
-    private readonly CheckBox _repeatEnabledBox = new() { Text = "重复" };
-    private readonly ComboBox _repeatUnitBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 64 };
-    private readonly NumericUpDown _repeatEveryBox = new() { Minimum = 1, Maximum = 365, Value = 1, Width = 58 };
-    private readonly NumericUpDown _postponeMinutesBox = new() { Minimum = 5, Maximum = 10080, Increment = 5, Value = 10, Width = 72 };
-    private readonly NumericUpDown _reminderLeadBox = new() { Minimum = 0, Maximum = 365, Width = 72 };
-    private readonly ComboBox _reminderLeadUnitBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 72 };
-    private readonly NumericUpDown _reminderRepeatMinutesBox = new() { Minimum = 1, Maximum = 365, Value = 10, Width = 72 };
-    private readonly ComboBox _reminderRepeatUnitBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 72 };
-    private readonly NumericUpDown _reminderRepeatCountBox = new() { Minimum = 0, Maximum = 20, Width = 72 };
+    private readonly Button _deadlineDateButton = new ModernButton() { Width = 178, Height = 36, TabStop = false };
+    private readonly ModernNumericUpDown _deadlineHourBox = TimeNumber(23);
+    private readonly ModernNumericUpDown _deadlineMinuteBox = TimeNumber(59);
+    private readonly RecurrenceEditor _recurrenceEditor = new();
+    private readonly ModernNumericUpDown _postponeMinutesBox = new() { Minimum = 5, Maximum = 10080, Increment = 5, Value = 10, Width = 82 };
+    private readonly ModernNumericUpDown _reminderLeadBox = new() { Minimum = 0, Maximum = 365, Width = 82 };
+    private readonly ComboBox _reminderLeadUnitBox = new ModernComboBox { Width = 72 };
+    private readonly ModernNumericUpDown _reminderRepeatMinutesBox = new() { Minimum = 1, Maximum = 365, Value = 10, Width = 82 };
+    private readonly ComboBox _reminderRepeatUnitBox = new ModernComboBox { Width = 72 };
+    private readonly ModernNumericUpDown _reminderRepeatCountBox = new() { Minimum = 0, Maximum = 20, Width = 82 };
     private readonly CheckBox _reminderRepeatEnabledBox = new() { Text = "再次提醒", AutoSize = true };
     private readonly FlowLayoutPanel _selectedTagsPanel = new() { Dock = DockStyle.Fill, AutoSize = true, WrapContents = true, BackColor = Color.White };
     private readonly ListBox _eventList = new() { HorizontalScrollbar = false, DrawMode = DrawMode.OwnerDrawFixed, ItemHeight = EventCardRenderer.ItemHeight };
@@ -88,6 +90,11 @@ public sealed class MainForm : Form
     private Control? _editorView;
     private Control? _timelineView;
     private Control? _folderView;
+    private ProjectView? _projectView;
+    private PeopleView? _peopleView;
+    private HistoryView? _historyView;
+    private NotesView? _notesView;
+    private SettingsForm? _settingsView;
     private TableLayoutPanel? _root;
     private FloatingCountdownForm? _floating;
     private PomodoroForm? _pomodoro;
@@ -103,6 +110,8 @@ public sealed class MainForm : Form
     private string? _autoPurposeTag;
     private Guid? _editingId;
     private Button? _saveButton;
+    private Action? _selectEditorNavigation;
+    private Action? _selectSettingsNavigation;
     private bool _allowExit;
     private Rectangle _lastNormalBounds;
     private FormWindowState _lastVisibleState = FormWindowState.Normal;
@@ -111,6 +120,9 @@ public sealed class MainForm : Form
     {
         _store = store;
         _events = _store.Load();
+        _people = _store.People;
+        _records = _store.Records;
+        _notes = _store.Notes;
         _settings = _settingsStore.Load();
         L.Use(_settings);
         _notifyIcon = new NotifyIcon
@@ -158,6 +170,7 @@ public sealed class MainForm : Form
         _floating?.Close();
         _pomodoro?.Close();
         _calendarView?.Close();
+        _settingsView?.Close();
         _notifyIcon.Dispose();
         _timer.Dispose();
         base.OnFormClosed(e);
@@ -194,7 +207,7 @@ public sealed class MainForm : Form
 
     private void ConfigureTrayMenu()
     {
-        var menu = new ContextMenuStrip();
+        var menu = new ModernContextMenuStrip();
         menu.Items.Add("显示主窗口", null, (_, _) => RestoreFromTray());
         menu.Items.Add("设置", null, (_, _) => OpenSettings());
         menu.Items.Add("退出", null, (_, _) => ExitApplication());
@@ -246,7 +259,7 @@ public sealed class MainForm : Form
 
     private void ShowCloseBehaviorPrompt()
     {
-        using var dialog = new CloseBehaviorDialog();
+        using var dialog = new CloseBehaviorDialog(_settings.CloseToTray ? CloseBehavior.MinimizeToTray : CloseBehavior.Exit);
         if (dialog.ShowDialog(this) != DialogResult.OK)
         {
             _timer.Start();
@@ -254,7 +267,7 @@ public sealed class MainForm : Form
         }
 
         _settings.CloseToTray = dialog.SelectedBehavior is CloseBehavior.MinimizeToTray;
-        _settings.CloseToTrayPromptDismissed = true;
+        _settings.CloseToTrayPromptDismissed = dialog.RememberChoice;
         _settingsStore.Save(_settings);
 
         if (_settings.CloseToTray)
@@ -331,7 +344,6 @@ public sealed class MainForm : Form
         StylePurposeButton(_recurringPurposeButton, recurring);
         StylePurposeButton(_birthdayPurposeButton, birthday);
         StylePurposeButton(_anniversaryPurposeButton, anniversary);
-        _repeatEnabledBox.Checked = recurring;
         UpdatePurposeTag(birthday ? "生日" : anniversary ? "纪念日" : recurring ? "周期" : null);
         _chooseDateButton.Text = L.T(birthday ? "选择生日日期与时间"
             : anniversary ? "选择纪念日与时间"
@@ -360,7 +372,7 @@ public sealed class MainForm : Form
         UpdateSelectedTags();
     }
 
-    private static void SetNumericValue(NumericUpDown box, int value)
+    private static void SetNumericValue(ModernNumericUpDown box, int value)
     {
         box.Value = Math.Min(box.Maximum, Math.Max(box.Minimum, value));
     }
@@ -395,7 +407,7 @@ public sealed class MainForm : Form
     private static string DateButtonText(DateTime date) =>
         $"{date:yyyy-MM-dd}  ·  {LunarDate.FullText(date)}";
 
-    private static void SetReminderDuration(NumericUpDown valueBox, ComboBox unitBox, int minutes)
+    private static void SetReminderDuration(ModernNumericUpDown valueBox, ComboBox unitBox, int minutes)
     {
         var unit = minutes > 0 && minutes % 1440 == 0
             ? ReminderUnit.Day
@@ -406,7 +418,7 @@ public sealed class MainForm : Form
         SetNumericValue(valueBox, minutes / UnitMinutes(unit));
     }
 
-    private static int ReminderMinutes(NumericUpDown valueBox, ComboBox unitBox) =>
+    private static int ReminderMinutes(ModernNumericUpDown valueBox, ComboBox unitBox) =>
         (int)valueBox.Value * UnitMinutes(SelectedValue<ReminderUnit>(unitBox));
 
     private static int UnitMinutes(ReminderUnit unit) => unit switch
@@ -446,15 +458,6 @@ public sealed class MainForm : Form
         AddOption(_priorityBox, "普通", EventPriority.Normal);
         AddOption(_priorityBox, "高", EventPriority.High);
 
-        AddOption(_repeatUnitBox, "不重复", RepeatUnit.None);
-        AddOption(_repeatUnitBox, "天", RepeatUnit.Day);
-        AddOption(_repeatUnitBox, "周", RepeatUnit.Week);
-        AddOption(_repeatUnitBox, "月", RepeatUnit.Month);
-        AddOption(_repeatUnitBox, "年", RepeatUnit.Year);
-        _repeatUnitBox.Items.RemoveAt(0);
-        _repeatUnitBox.SelectedIndex = 0;
-        _repeatUnitBox.Enabled = false;
-        _repeatEveryBox.Enabled = false;
         _reminderRepeatEnabledBox.CheckedChanged += (_, _) => UpdateReminderRepeatControls();
 
         AddOption(_calendarBox, "阳历", CalendarKind.Solar);
@@ -491,18 +494,13 @@ public sealed class MainForm : Form
         AddOption(_filterBox, "可能要做", TimelineFilter.Maybe);
 
         AddOption(_parentBox, "不加入收藏夹", (Guid?)null);
-        foreach (var control in new Control[] { _titleBox, _notesBox, _typeBox, _priorityBox, _calendarBox, _anniversaryModeBox, _milestoneDaysBox, _subjectNameBox, _relationshipBox, _birthdayLeapDayRuleBox, _templateBox, _repeatUnitBox, _parentBox, _searchBox })
+        foreach (var control in new Control[] { _titleBox, _notesBox, _typeBox, _priorityBox, _calendarBox, _anniversaryModeBox, _milestoneDaysBox, _subjectNameBox, _relationshipBox, _birthdayLeapDayRuleBox, _templateBox, _parentBox, _searchBox })
         {
             StyleInput(control);
         }
 
         _hasStartBox.CheckedChanged += (_, _) => { SetTimeRowEnabled(StartTimeControls(), _hasStartBox.Checked); RefreshDateButtons(); };
         _hasDeadlineBox.CheckedChanged += (_, _) => { SetTimeRowEnabled(DeadlineTimeControls(), _hasDeadlineBox.Checked); RefreshDateButtons(); };
-        _repeatEnabledBox.CheckedChanged += (_, _) =>
-        {
-            _repeatEveryBox.Enabled = _repeatEnabledBox.Checked;
-            _repeatUnitBox.Enabled = _repeatEnabledBox.Checked;
-        };
         _filterBox.SelectedIndexChanged += (_, _) => RefreshList();
         _searchBox.TextChanged += (_, _) => RefreshList();
         _templateBox.SelectedIndexChanged += (_, _) => ApplySelectedTemplate();
@@ -550,7 +548,7 @@ public sealed class MainForm : Form
             Padding = new Padding(18),
             BackColor = AppBack
         };
-        root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 124));
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 136));
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 440));
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         _root = root;
@@ -571,52 +569,68 @@ public sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 11,
-            Margin = new Padding(0, 0, 12, 0),
-            BackColor = AppBack
+            RowCount = 14,
+            Margin = new Padding(0, 0, 16, 0),
+            BackColor = AppBack,
+            Padding = new Padding(0, 0, 10, 0)
         };
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 16));
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 66));
+        for (var i = 0; i < 4; i++) panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 12));
+        for (var i = 0; i < 4; i++) panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 12));
+        for (var i = 0; i < 2; i++) panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
         panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         panel.Controls.Add(SidebarBrand());
-        panel.Controls.Add(SidebarSection("事项"));
+        var navigation = new List<Button>();
+        void Select(Button selected)
+        {
+            foreach (var button in navigation) StyleSidebarButton(button, button == selected);
+        }
+        Button NavigationButton(string text, Action action)
+        {
+            var button = SidebarButton(text);
+            navigation.Add(button);
+            button.Click += (_, _) => { Select(button); action(); };
+            return button;
+        }
 
-        var add = SidebarButton("新建事务");
-        add.Click += (_, _) => ShowLeftView(_editorView!);
+        var add = NavigationButton("新建事务", () => ShowLeftView(_editorView!));
         panel.Controls.Add(add);
 
-        var current = SidebarButton("当前事务");
-        current.Click += (_, _) => ShowLeftView(BuildCurrentView());
+        var current = NavigationButton("当前事务", () => ShowLeftView(BuildCurrentView()));
         panel.Controls.Add(current);
 
-        var recommended = SidebarButton("推荐优先");
-        recommended.Click += (_, _) => ShowLeftView(BuildRecommendedView());
+        var recommended = NavigationButton("推荐优先", () => ShowLeftView(BuildRecommendedView()));
         panel.Controls.Add(recommended);
 
-        var calendar = SidebarButton("日历视图");
-        calendar.Click += (_, _) => OpenCalendarView();
+        var calendar = NavigationButton("日历视图", OpenCalendarView);
         panel.Controls.Add(calendar);
+        panel.Controls.Add(new Panel { Dock = DockStyle.Fill, BackColor = AppBack });
 
-        var folders = SidebarButton("收藏夹");
-        folders.Click += (_, _) => OpenFolderView();
+        var projects = NavigationButton("项目", OpenProjectView);
+        panel.Controls.Add(projects);
+
+        var folders = NavigationButton("收藏夹", OpenFolderView);
         panel.Controls.Add(folders);
 
-        var pomodoro = SidebarButton("番茄钟");
-        pomodoro.Click += (_, _) => OpenPomodoroView();
+        var history = NavigationButton("记录", OpenHistoryView);
+        panel.Controls.Add(history);
+
+        var notes = NavigationButton("便签", OpenNotesView);
+        panel.Controls.Add(notes);
+        panel.Controls.Add(new Panel { Dock = DockStyle.Fill, BackColor = AppBack });
+
+        var pomodoro = NavigationButton("番茄钟", OpenPomodoroView);
         panel.Controls.Add(pomodoro);
 
-        var settings = SidebarButton("设置");
-        settings.Click += (_, _) => OpenSettings();
+        var settings = NavigationButton("设置", OpenSettings);
         panel.Controls.Add(settings);
+
+        _selectEditorNavigation = () => Select(add);
+        _selectSettingsNavigation = () => Select(settings);
+        Select(add);
 
         return panel;
     }
@@ -625,6 +639,11 @@ public sealed class MainForm : Form
     {
         if (_pomodoro is { IsDisposed: false }) _pomodoro.Visible = false;
         if (_calendarView is { IsDisposed: false }) _calendarView.Visible = false;
+        if (_projectView is not null) _projectView.Visible = false;
+        if (_peopleView is not null) _peopleView.Visible = false;
+        if (_historyView is not null) _historyView.Visible = false;
+        if (_notesView is not null) _notesView.Visible = false;
+        if (_settingsView is { IsDisposed: false }) _settingsView.Visible = false;
         if (_folderView is not null)
         {
             _root?.Controls.Remove(_folderView);
@@ -686,11 +705,7 @@ public sealed class MainForm : Form
     {
         if (sender is ListBox { SelectedItem: EventItem item })
         {
-            using var dialog = new EventEditForm(item);
-            if (dialog.ShowDialog(this) == DialogResult.OK)
-            {
-                SaveAndRefresh();
-            }
+            EditEventFromDialog(item);
         }
     }
 
@@ -704,7 +719,7 @@ public sealed class MainForm : Form
             }
         };
 
-        var menu = new ContextMenuStrip();
+        var menu = new ModernContextMenuStrip();
         menu.Opening += (_, e) =>
         {
             menu.Items.Clear();
@@ -715,18 +730,27 @@ public sealed class MainForm : Form
             }
 
             menu.Items.Add("编辑", null, (_, _) => EditEventFromDialog(item));
-            if (item.Status is not EventStatus.Cancelled && (item.IsRecurringSeries || item.Status is not EventStatus.Done))
+            if (item.Status is not EventStatus.Cancelled && item.IsRecurringSeries)
             {
-                menu.Items.Add(item.IsRecurringSeries ? "完成本次" : "完成", null, (_, _) => SetStatus(item, EventStatus.Done));
-                if (item.IsRecurringSeries)
+                if (!item.IsRecurrencePaused)
                 {
+                    menu.Items.Add("完成本次", null, (_, _) => SetStatus(item, EventStatus.Done));
                     menu.Items.Add("跳过本次", null, (_, _) => SetStatus(item, EventStatus.Skipped));
-                    menu.Items.Add("结束重复", null, (_, _) =>
-                    {
-                        item.EndRecurringSeries();
-                        SaveAndRefresh();
-                    });
                 }
+                menu.Items.Add(item.IsRecurrencePaused ? "恢复重复" : "暂停重复", null, (_, _) =>
+                {
+                    item.SetRecurrencePaused(!item.IsRecurrencePaused);
+                    SaveAndRefresh();
+                });
+                menu.Items.Add("结束重复", null, (_, _) =>
+                {
+                    item.EndRecurringSeries();
+                    SaveAndRefresh();
+                });
+            }
+            else if (item.Status is not (EventStatus.Cancelled or EventStatus.Done))
+            {
+                menu.Items.Add("完成", null, (_, _) => SetStatus(item, EventStatus.Done));
             }
 
             var addToFolder = new ToolStripMenuItem("加入收藏夹");
@@ -773,7 +797,7 @@ public sealed class MainForm : Form
 
     private void AddToFolder(EventItem item, EventItem folder)
     {
-        if (item.IsGroup || item.Id == folder.Id)
+        if (item.IsGroup || item.IsProject || item.Id == folder.Id)
         {
             return;
         }
@@ -814,7 +838,7 @@ public sealed class MainForm : Form
             _events.Add(folder);
         }
 
-        foreach (var item in _events.Where(x => !x.IsGroup && SplitTags(x.Tags).Contains(tag, StringComparer.OrdinalIgnoreCase)))
+        foreach (var item in _events.Where(x => !x.IsGroup && !x.IsProject && SplitTags(x.Tags).Contains(tag, StringComparer.OrdinalIgnoreCase)))
         {
             item.AddToFolder(folder.Id);
         }
@@ -828,7 +852,15 @@ public sealed class MainForm : Form
             return;
         }
 
-        if (item.IsGroup)
+        if (item.IsProject)
+        {
+            foreach (var step in _events.Where(x => x.ProjectId == item.Id))
+            {
+                step.ProjectId = null;
+                step.ProjectOrder = 0;
+            }
+        }
+        else if (item.IsGroup)
         {
             foreach (var child in _events.Where(x => x.IsInFolder(item.Id)))
             {
@@ -842,7 +874,7 @@ public sealed class MainForm : Form
     private static string? PromptForText(string title, string label)
     {
         using var dialog = new Form { Text = title, Width = 380, Height = 170, StartPosition = FormStartPosition.CenterParent, Font = new Font("Microsoft YaHei UI", 9F) };
-        var input = new TextBox { Dock = DockStyle.Top };
+        var input = new ModernTextBox { Dock = DockStyle.Top };
         var ok = new Button { Text = "确定", DialogResult = DialogResult.OK, Width = 84, Height = 32 };
         var cancel = new Button { Text = "取消", DialogResult = DialogResult.Cancel, Width = 84, Height = 32 };
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, ColumnCount = 1, Padding = new Padding(18) };
@@ -911,7 +943,7 @@ public sealed class MainForm : Form
         AddWideRow(form, _hasDeadlineBox);
         _deadlineTimePanel = TimePanel(_deadlineDateButton);
         AddWideRow(form, _deadlineTimePanel);
-        _repeatOptionsPanel = OptionsPanel(("重复规则", RepeatPanel()));
+        _repeatOptionsPanel = OptionsPanel(("重复规则", (Control)_recurrenceEditor));
         AddWideRow(form, _repeatOptionsPanel);
         _occasionSubjectPanel = OptionsPanel(
             ("人物或纪念对象", (Control)_subjectNameBox),
@@ -956,12 +988,23 @@ public sealed class MainForm : Form
 
     private Control PurposeSelector()
     {
-        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, Height = 40, ColumnCount = 4, RowCount = 1, Margin = Padding.Empty };
+        var panel = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            Height = 50,
+            ColumnCount = 4,
+            RowCount = 1,
+            Margin = Padding.Empty,
+            Padding = new Padding(4),
+            BackColor = Color.FromArgb(248, 250, 252)
+        };
         for (var i = 0; i < 4; i++) panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
         panel.Controls.Add(_ordinaryPurposeButton, 0, 0);
         panel.Controls.Add(_recurringPurposeButton, 1, 0);
         panel.Controls.Add(_birthdayPurposeButton, 2, 0);
         panel.Controls.Add(_anniversaryPurposeButton, 3, 0);
+        panel.Paint += (_, e) => ModernUi.DrawBorder(e.Graphics, panel.ClientRectangle, 12, Border);
+        ModernUi.Round(panel, 12);
         return panel;
     }
 
@@ -1138,16 +1181,17 @@ public sealed class MainForm : Form
 
         foreach (var tag in tags)
         {
-            _selectedTagsPanel.Controls.Add(new Label
+            var chip = new Label
             {
                 Text = $"# {tag}",
                 AutoSize = true,
-                Padding = new Padding(8, 5, 8, 5),
+                Padding = new Padding(10, 5, 10, 5),
                 Margin = new Padding(0, 0, 6, 6),
                 BackColor = Color.FromArgb(239, 246, 255),
-                ForeColor = Accent,
-                BorderStyle = BorderStyle.FixedSingle
-            });
+                ForeColor = Accent
+            };
+            ModernUi.Pill(chip);
+            _selectedTagsPanel.Controls.Add(chip);
         }
     }
 
@@ -1239,15 +1283,6 @@ public sealed class MainForm : Form
         Margin = Padding.Empty
     };
 
-    private Control RepeatPanel()
-    {
-        var panel = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = false, Margin = Padding.Empty };
-        panel.Controls.Add(new Label { Text = "每", AutoSize = true, Padding = new Padding(0, 8, 0, 0), ForeColor = TextMuted });
-        panel.Controls.Add(_repeatEveryBox);
-        panel.Controls.Add(_repeatUnitBox);
-        return panel;
-    }
-
     private Control ReminderPolicyPanel()
     {
         var panel = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 4, Margin = Padding.Empty };
@@ -1336,7 +1371,7 @@ public sealed class MainForm : Form
         }
 
         var now = DateTime.Now;
-        _repeatEnabledBox.Checked = false;
+        _recurrenceEditor.Reset();
         _hasStartBox.Checked = true;
         _hasDeadlineBox.Checked = false;
         ApplySettingsToEditorDefaults();
@@ -1364,9 +1399,7 @@ public sealed class MainForm : Form
             case TimeTemplate.DailyHabit:
                 SelectComboValue(_typeBox, EventType.Recurring);
                 SetTimeBoxes(now.Date.AddDays(1).AddHours(9), _startDateBox, _startHourBox, _startMinuteBox);
-                _repeatEnabledBox.Checked = true;
-                SelectComboValue(_repeatUnitBox, RepeatUnit.Day);
-                _repeatEveryBox.Value = 1;
+                _recurrenceEditor.SetSimple(RepeatUnit.Day, 1);
                 break;
             case TimeTemplate.Birthday:
                 SelectComboValue(_typeBox, EventType.Birthday);
@@ -1405,7 +1438,7 @@ public sealed class MainForm : Form
         DateTime? deadlineAt = _hasDeadlineBox.Checked ? BuildTime(_deadlineDateBox, _deadlineHourBox, _deadlineMinuteBox) : null;
         var type = purpose is EventType.Birthday or EventType.Anniversary
             ? purpose
-            : _repeatEnabledBox.Checked
+            : purpose is EventType.Recurring or EventType.Habit
                 ? EventType.Recurring
             : startAt is not null && deadlineAt is not null
                 ? EventType.TimeWindow
@@ -1435,16 +1468,27 @@ public sealed class MainForm : Form
         item.Priority = SelectedValue<EventPriority>(_priorityBox);
         item.StartAt = startAt;
         item.DeadlineAt = deadlineAt;
-        item.RepeatUnit = _repeatEnabledBox.Checked ? SelectedValue<RepeatUnit>(_repeatUnitBox) : RepeatUnit.None;
+        if (type is EventType.Recurring or EventType.Habit)
+        {
+            if (!_recurrenceEditor.ApplyTo(item, startAt, out var recurrenceError))
+            {
+                MessageBox.Show(recurrenceError, "重复规则有误", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+        }
+        else
+        {
+            item.RepeatUnit = RepeatUnit.None;
+        }
         item.BirthdayCalendar = SelectedValue<CalendarKind>(_calendarBox);
         item.BirthdayYearKnown = _birthdayYearKnownBox.Checked;
         item.BirthdayIsLeapMonth = _birthdayLeapMonthBox.Checked && item.BirthdayCalendar is CalendarKind.Lunar;
         item.BirthdayLeapDayRule = SelectedValue<LeapDayRule>(_birthdayLeapDayRuleBox);
         item.SubjectName = _subjectNameBox.Text.Trim();
         item.Relationship = _relationshipBox.Text.Trim();
+        ResolvePersonAssociation(item);
         item.AnniversaryMode = SelectedValue<AnniversaryMode>(_anniversaryModeBox);
         item.MilestoneDays = _milestoneDaysBox.Text.Trim();
-        item.RepeatEvery = _repeatEnabledBox.Checked ? (int)_repeatEveryBox.Value : 1;
         item.ReminderLeadMinutes = ReminderMinutes(_reminderLeadBox, _reminderLeadUnitBox);
         item.ReminderRepeatMinutes = ReminderMinutes(_reminderRepeatMinutesBox, _reminderRepeatUnitBox);
         item.ReminderRepeatCount = _reminderRepeatEnabledBox.Checked ? (int)_reminderRepeatCountBox.Value : 0;
@@ -1507,6 +1551,7 @@ public sealed class MainForm : Form
         _relationshipBox.Clear();
         _birthdayYearKnownBox.Checked = true;
         _birthdayLeapMonthBox.Checked = false;
+        _recurrenceEditor.Reset();
         ClearCategories();
         ApplySettingsToEditorDefaults();
         SelectComboValue(_templateBox, TimeTemplate.None);
@@ -1526,11 +1571,7 @@ public sealed class MainForm : Form
             return;
         }
 
-        using var dialog = new EventEditForm(item);
-        if (dialog.ShowDialog(this) == DialogResult.OK)
-        {
-            SaveAndRefresh();
-        }
+        EditEventFromDialog(item);
     }
 
     private void EventListMouseClick(object? sender, MouseEventArgs e)
@@ -1591,7 +1632,7 @@ public sealed class MainForm : Form
     {
         if (status is EventStatus.Done)
         {
-            item.Complete();
+            CompleteAndRecord(item);
         }
         else if (status is EventStatus.Skipped)
         {
@@ -1615,7 +1656,7 @@ public sealed class MainForm : Form
         }
 
         var minutes = (int)_postponeMinutesBox.Value;
-        if (item.IsRecurringSeries)
+        if (item.IsRecurringSeries || item.ProjectId is not null)
         {
             item.ShiftSchedule(minutes);
             SaveAndRefresh();
@@ -1643,6 +1684,7 @@ public sealed class MainForm : Form
             BirthdayLeapDayRule = item.BirthdayLeapDayRule,
             SubjectName = item.SubjectName,
             Relationship = item.Relationship,
+            PersonIds = [.. item.PersonIds],
             AnniversaryMode = item.AnniversaryMode,
             MilestoneDays = item.MilestoneDays,
             Status = EventStatus.Pending,
@@ -1694,6 +1736,11 @@ public sealed class MainForm : Form
             _folderView = null;
         }
         if (_calendarView is { IsDisposed: false }) _calendarView.Visible = false;
+        if (_projectView is not null) _projectView.Visible = false;
+        if (_peopleView is not null) _peopleView.Visible = false;
+        if (_historyView is not null) _historyView.Visible = false;
+        if (_notesView is not null) _notesView.Visible = false;
+        if (_settingsView is { IsDisposed: false }) _settingsView.Visible = false;
         _leftContent.Visible = false;
         if (_timelineView is not null) _timelineView.Visible = false;
 
@@ -1723,6 +1770,11 @@ public sealed class MainForm : Form
         if (_root is null) return;
 
         if (_pomodoro is { IsDisposed: false }) _pomodoro.Visible = false;
+        if (_projectView is not null) _projectView.Visible = false;
+        if (_peopleView is not null) _peopleView.Visible = false;
+        if (_historyView is not null) _historyView.Visible = false;
+        if (_notesView is not null) _notesView.Visible = false;
+        if (_settingsView is { IsDisposed: false }) _settingsView.Visible = false;
         if (_folderView is not null)
         {
             _root.Controls.Remove(_folderView);
@@ -1735,8 +1787,8 @@ public sealed class MainForm : Form
         if (_calendarView is null || _calendarView.IsDisposed)
         {
             _calendarView = new CalendarViewForm(
-                _events, EditEventFromDialog, CreateEventFromCalendar,
-                item => SetStatus(item, EventStatus.Done), DeleteEvent, AddToFolder,
+                _events, (item, day) => EditEventFromDialog(item, day), CreateEventFromCalendar,
+                item => SetStatus(item, EventStatus.Done), ToggleRecurrencePaused, DeleteEvent, AddToFolder,
                 item => CreateFolder(item), CreateFolderFromTag)
             {
                 TopLevel = false,
@@ -1766,6 +1818,11 @@ public sealed class MainForm : Form
 
         if (_pomodoro is { IsDisposed: false }) _pomodoro.Visible = false;
         if (_calendarView is { IsDisposed: false }) _calendarView.Visible = false;
+        if (_projectView is not null) _projectView.Visible = false;
+        if (_peopleView is not null) _peopleView.Visible = false;
+        if (_historyView is not null) _historyView.Visible = false;
+        if (_notesView is not null) _notesView.Visible = false;
+        if (_settingsView is { IsDisposed: false }) _settingsView.Visible = false;
         _folderView?.Dispose();
         _folderView = new FolderViewForm(_events, EditEventFromDialog, DeleteEvent, () => CreateFolder(), SaveAndRefresh)
         {
@@ -1782,30 +1839,245 @@ public sealed class MainForm : Form
         _folderView.BringToFront();
     }
 
-    private void OpenSettings()
+    private void OpenProjectView()
     {
-        using var dialog = new SettingsForm(_settings);
-        if (dialog.ShowDialog(this) == DialogResult.OK)
+        if (_root is null) return;
+        if (_pomodoro is { IsDisposed: false }) _pomodoro.Visible = false;
+        if (_calendarView is { IsDisposed: false }) _calendarView.Visible = false;
+        if (_peopleView is not null) _peopleView.Visible = false;
+        if (_historyView is not null) _historyView.Visible = false;
+        if (_notesView is not null) _notesView.Visible = false;
+        if (_settingsView is { IsDisposed: false }) _settingsView.Visible = false;
+        if (_folderView is not null)
         {
-            _settingsStore.Save(_settings);
-            if (dialog.LanguageChanged)
-            {
-                RestartRequested = true;
-                _allowExit = true;
-                Close();
-                return;
-            }
-            ApplySettingsToEditorDefaults();
+            _root.Controls.Remove(_folderView);
+            _folderView.Dispose();
+            _folderView = null;
         }
+        _leftContent.Visible = false;
+        if (_timelineView is not null) _timelineView.Visible = false;
+        if (_projectView is null || _projectView.IsDisposed)
+        {
+            _projectView = new ProjectView(
+                _events,
+                EditEventFromDialog,
+                item => SetStatus(item, EventStatus.Done),
+                DeleteEvent,
+                SaveAndRefresh);
+            _root.Controls.Add(_projectView, 1, 0);
+            _root.SetColumnSpan(_projectView, 2);
+        }
+        _projectView.RefreshView();
+        _projectView.Visible = true;
+        _projectView.BringToFront();
     }
 
-    private void EditEventFromDialog(EventItem item)
+    private void OpenPeopleView()
     {
-        using var dialog = new EventEditForm(item);
-        if (dialog.ShowDialog(this) == DialogResult.OK)
+        if (_root is null) return;
+        HideEmbeddedViews();
+        if (_peopleView is null || _peopleView.IsDisposed)
         {
-            SaveAndRefresh();
+            _peopleView = new PeopleView(_people, _events, _records, EditEventFromDialog, SaveAndRefresh);
+            _root.Controls.Add(_peopleView, 1, 0);
+            _root.SetColumnSpan(_peopleView, 2);
         }
+        _peopleView.RefreshView();
+        _peopleView.Visible = true;
+        _peopleView.BringToFront();
+    }
+
+    private void OpenHistoryView()
+    {
+        if (_root is null) return;
+        HideEmbeddedViews();
+        if (_historyView is null || _historyView.IsDisposed)
+        {
+            _historyView = new HistoryView(_records, _events, SaveAndRefresh);
+            _root.Controls.Add(_historyView, 1, 0);
+            _root.SetColumnSpan(_historyView, 2);
+        }
+        _historyView.RefreshView();
+        _historyView.Visible = true;
+        _historyView.BringToFront();
+    }
+
+    private void OpenNotesView()
+    {
+        if (_root is null) return;
+        HideEmbeddedViews();
+        if (_notesView is null || _notesView.IsDisposed)
+        {
+            _notesView = new NotesView(_notes, SaveAndRefresh);
+            _root.Controls.Add(_notesView, 1, 0);
+            _root.SetColumnSpan(_notesView, 2);
+        }
+        _notesView.RefreshView();
+        _notesView.Visible = true;
+        _notesView.BringToFront();
+    }
+
+    private void HideEmbeddedViews()
+    {
+        if (_pomodoro is { IsDisposed: false }) _pomodoro.Visible = false;
+        if (_calendarView is { IsDisposed: false }) _calendarView.Visible = false;
+        if (_projectView is not null) _projectView.Visible = false;
+        if (_peopleView is not null) _peopleView.Visible = false;
+        if (_historyView is not null) _historyView.Visible = false;
+        if (_notesView is not null) _notesView.Visible = false;
+        if (_settingsView is { IsDisposed: false }) _settingsView.Visible = false;
+        if (_folderView is not null)
+        {
+            _root?.Controls.Remove(_folderView);
+            _folderView.Dispose();
+            _folderView = null;
+        }
+        _leftContent.Visible = false;
+        if (_timelineView is not null) _timelineView.Visible = false;
+    }
+
+    private void OpenSettings()
+    {
+        if (_root is null) return;
+        if (!Visible) RestoreFromTray();
+        HideEmbeddedViews();
+        _selectSettingsNavigation?.Invoke();
+        if (_settingsView is null || _settingsView.IsDisposed)
+        {
+            _settingsView = new SettingsForm(_settings)
+            {
+                TopLevel = false,
+                FormBorderStyle = FormBorderStyle.None,
+                Dock = DockStyle.Fill,
+                Margin = Padding.Empty,
+                MinimumSize = Size.Empty
+            };
+            _settingsView.SettingsSaved += (_, _) =>
+            {
+                _settingsStore.Save(_settings);
+                if (_settingsView.LanguageChanged)
+                {
+                    RestartRequested = true;
+                    _allowExit = true;
+                    Close();
+                    return;
+                }
+                ApplySettingsToEditorDefaults();
+            };
+            _settingsView.CancelRequested += (_, _) =>
+            {
+                var view = _settingsView;
+                _settingsView = null;
+                if (view is not null)
+                {
+                    _root.Controls.Remove(view);
+                    view.Dispose();
+                }
+                _selectEditorNavigation?.Invoke();
+                ShowLeftView(_editorView!);
+            };
+            _root.Controls.Add(_settingsView, 1, 0);
+            _root.SetColumnSpan(_settingsView, 2);
+            _settingsView.Show();
+        }
+        else _settingsView.Visible = true;
+        _settingsView.BringToFront();
+    }
+
+    private void EditEventFromDialog(EventItem item) => EditEventFromDialog(item, null);
+
+    private void EditEventFromDialog(EventItem item, DateTime? occurrenceDay)
+    {
+        var scope = item.IsRecurringSeries ? ChooseRecurrenceEditScope() : RecurrenceEditScope.EntireSeries;
+        if (scope is null) return;
+
+        var occurrenceAt = item.IsRecurringSeries
+            ? occurrenceDay is null
+                ? item.CurrentOrNextOccurrenceAt(DateTime.Now)
+                : item.OccurrenceOn(occurrenceDay.Value)
+            : null;
+        var working = CloneEvent(item);
+        if (scope is not RecurrenceEditScope.EntireSeries && occurrenceAt is not null)
+        {
+            MoveWorkingCopyToOccurrence(working, occurrenceAt.Value);
+        }
+        using var dialog = new EventEditForm(working, working.ProjectId is not null);
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        ResolvePersonAssociation(working);
+
+        var index = _events.IndexOf(item);
+        if (index < 0) return;
+        if (scope is RecurrenceEditScope.EntireSeries || occurrenceAt is null)
+        {
+            working.Id = item.Id;
+            working.Occurrences.RemoveAll(x => !x.IsHandled);
+            _events[index] = working;
+        }
+        else if (scope is RecurrenceEditScope.ThisOccurrence)
+        {
+            item.SkipOccurrenceAt(occurrenceAt.Value);
+            working.DetachFromSeries();
+            _events.Add(working);
+        }
+        else
+        {
+            var first = item.CurrentOrNextOccurrenceAt((item.StartAt ?? occurrenceAt.Value).AddTicks(-1));
+            if (first == occurrenceAt)
+            {
+                working.Id = item.Id;
+                working.Occurrences = [];
+                _events[index] = working;
+            }
+            else
+            {
+                item.EndBefore(occurrenceAt.Value);
+                working.ResetAsNewSeries();
+                _events.Add(working);
+            }
+        }
+        SaveAndRefresh();
+    }
+
+    private void ToggleRecurrencePaused(EventItem item)
+    {
+        item.SetRecurrencePaused(!item.IsRecurrencePaused);
+        SaveAndRefresh();
+    }
+
+    private RecurrenceEditScope? ChooseRecurrenceEditScope()
+    {
+        var page = new TaskDialogPage
+        {
+            Caption = L.T("编辑周期事项"),
+            Heading = L.T("要修改哪些事件？"),
+            Text = L.T("选择修改范围。已完成和已跳过的历史记录不会被改动。"),
+            AllowCancel = true,
+            Icon = TaskDialogIcon.Information
+        };
+        var onlyThis = new TaskDialogCommandLinkButton(L.T("仅本次"), L.T("把当前一次作为独立事项修改"));
+        var thisAndFuture = new TaskDialogCommandLinkButton(L.T("本次及以后"), L.T("保留过去记录，从本次开始使用新规则"));
+        var entire = new TaskDialogCommandLinkButton(L.T("整个系列"), L.T("修改这个周期事项的全部规则"));
+        page.Buttons.Add(onlyThis);
+        page.Buttons.Add(thisAndFuture);
+        page.Buttons.Add(entire);
+        var result = TaskDialog.ShowDialog(this, page);
+        if (result == onlyThis) return RecurrenceEditScope.ThisOccurrence;
+        if (result == thisAndFuture) return RecurrenceEditScope.ThisAndFuture;
+        if (result == entire) return RecurrenceEditScope.EntireSeries;
+        return null;
+    }
+
+    private static EventItem CloneEvent(EventItem item) =>
+        JsonSerializer.Deserialize<EventItem>(JsonSerializer.Serialize(item)) ?? throw new InvalidOperationException("无法复制事项。");
+
+    private static void MoveWorkingCopyToOccurrence(EventItem item, DateTime occurrenceAt)
+    {
+        var offset = item.StartAt is null ? TimeSpan.Zero : occurrenceAt - item.StartAt.Value;
+        item.StartAt = occurrenceAt;
+        item.EndAt = item.EndAt?.Add(offset);
+        item.DeadlineAt = item.DeadlineAt?.Add(offset);
+        item.Status = EventStatus.Pending;
+        item.IsRecurrencePaused = false;
     }
 
     private void CreateEventFromCalendar(DateTime day)
@@ -1821,6 +2093,7 @@ public sealed class MainForm : Form
         using var dialog = new EventEditForm(item);
         if (dialog.ShowDialog(this) == DialogResult.OK)
         {
+            ResolvePersonAssociation(item);
             _events.Add(item);
             SaveAndRefresh();
         }
@@ -1889,7 +2162,7 @@ public sealed class MainForm : Form
         switch (dialog.SelectedAction)
         {
             case ReminderDialogAction.Complete:
-                item.Complete();
+                CompleteAndRecord(item);
                 break;
             case ReminderDialogAction.Snooze:
                 item.SnoozeUntil(DateTime.Now.AddMinutes(dialog.Minutes));
@@ -1923,12 +2196,16 @@ public sealed class MainForm : Form
 
     private void SaveAndRefresh()
     {
-        _store.Save(_events);
+        _store.Save(_events, _people, _records, _notes);
         RefreshParentOptions();
         RefreshTagFilter();
         RefreshList();
         RefreshSideLists();
         if (_calendarView is { IsDisposed: false }) _calendarView.RefreshView();
+        if (_projectView is { IsDisposed: false }) _projectView.RefreshView();
+        if (_peopleView is { IsDisposed: false }) _peopleView.RefreshView();
+        if (_historyView is { IsDisposed: false }) _historyView.RefreshView();
+        if (_notesView is { IsDisposed: false }) _notesView.RefreshView();
     }
 
     private void RefreshSideLists()
@@ -1948,7 +2225,7 @@ public sealed class MainForm : Form
 
     private bool MatchesFilter(EventItem item, DateTime now)
     {
-        if (item.IsGroup)
+        if (item.IsGroup || item.IsProject)
         {
             return false;
         }
@@ -1995,7 +2272,7 @@ public sealed class MainForm : Form
             || SplitTags($"{item.Tags}, {item.Categories}").Any(tag => tag.Contains(keyword, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static DateTime BuildTime(DateTimePicker date, NumericUpDown hour, NumericUpDown minute)
+    private static DateTime BuildTime(DateTimePicker date, ModernNumericUpDown hour, ModernNumericUpDown minute)
     {
         return date.Value.Date.AddHours((double)hour.Value).AddMinutes((double)minute.Value);
     }
@@ -2005,7 +2282,7 @@ public sealed class MainForm : Form
         return value?.AddMinutes(minutes);
     }
 
-    private static void SetTimeBoxes(DateTime value, DateTimePicker date, NumericUpDown hour, NumericUpDown minute)
+    private static void SetTimeBoxes(DateTime value, DateTimePicker date, ModernNumericUpDown hour, ModernNumericUpDown minute)
     {
         date.Value = value.Date;
         hour.Value = value.Hour;
@@ -2014,7 +2291,67 @@ public sealed class MainForm : Form
 
     private static bool CanComplete(EventItem item)
     {
-        return item.Status is not EventStatus.Cancelled && (item.IsRecurringSeries || item.Status is not EventStatus.Done);
+        return item.Status is not EventStatus.Cancelled
+            && (!item.IsRecurringSeries || !item.IsRecurrencePaused)
+            && (item.IsRecurringSeries || item.Status is not EventStatus.Done);
+    }
+
+    private void ResolvePersonAssociation(EventItem item)
+    {
+        if (item.Type is not (EventType.Birthday or EventType.Anniversary) || string.IsNullOrWhiteSpace(item.SubjectName)) return;
+        var person = _people.FirstOrDefault(x => x.Name.Equals(item.SubjectName.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (person is null)
+        {
+            person = new PersonProfile { Name = item.SubjectName.Trim(), Relationship = item.Relationship.Trim() };
+            _people.Add(person);
+        }
+        else if (string.IsNullOrWhiteSpace(person.Relationship) && !string.IsNullOrWhiteSpace(item.Relationship))
+        {
+            person.Relationship = item.Relationship.Trim();
+            person.UpdatedAt = DateTime.Now;
+        }
+        item.PersonIds = [person.Id];
+    }
+
+    private void CompleteAndRecord(EventItem item)
+    {
+        var now = DateTime.Now;
+        var dueAt = item.NextDueAt(now);
+        item.Complete(now);
+        var kind = item.Type switch
+        {
+            EventType.Birthday => ActivityRecordKind.BirthdayCelebrated,
+            EventType.Anniversary => ActivityRecordKind.AnniversaryCelebrated,
+            _ => ActivityRecordKind.EventCompleted
+        };
+        _records.Add(new ActivityRecord
+        {
+            Kind = kind,
+            EventId = item.Id,
+            ProjectId = item.ProjectId,
+            PersonIds = [.. item.PersonIds],
+            Title = kind switch
+            {
+                ActivityRecordKind.BirthdayCelebrated => $"庆祝了{item.SubjectName.DefaultIfBlank(item.Title)}的生日",
+                ActivityRecordKind.AnniversaryCelebrated => $"纪念了{item.SubjectName.DefaultIfBlank(item.Title)}",
+                _ => $"完成了：{item.Title}"
+            },
+            Detail = dueAt is null ? item.TypeText : $"计划时间 {dueAt:yyyy-MM-dd HH:mm}",
+            OccurredAt = now
+        });
+
+        if (item.ProjectId is not Guid projectId) return;
+        var steps = _events.Where(x => x.ProjectId == projectId).ToList();
+        if (steps.Count == 0 || steps.Any(x => x.Status is not (EventStatus.Done or EventStatus.Skipped or EventStatus.Cancelled))) return;
+        if (_records.Any(x => x.Kind is ActivityRecordKind.ProjectCompleted && x.ProjectId == projectId)) return;
+        var project = _events.FirstOrDefault(x => x.Id == projectId && x.IsProject);
+        _records.Add(new ActivityRecord
+        {
+            Kind = ActivityRecordKind.ProjectCompleted,
+            ProjectId = projectId,
+            Title = $"完成项目：{project?.Title ?? "未命名项目"}",
+            OccurredAt = now
+        });
     }
 
     private void RefreshParentOptions()
@@ -2108,36 +2445,52 @@ public sealed class MainForm : Form
 
     private static Button PurposeButton(string text)
     {
-        var button = SecondaryButton(text);
-        button.Dock = DockStyle.Fill;
-        button.Height = 38;
-        button.Margin = new Padding(0, 0, 8, 0);
+        var button = new ModernButton
+        {
+            Text = text,
+            Dock = DockStyle.Fill,
+            Height = 42,
+            BackColor = Color.White,
+            ForeColor = TextMain,
+            Margin = new Padding(3, 0, 3, 0),
+            Cursor = Cursors.Hand
+        };
         return button;
     }
 
     private static void StylePurposeButton(Button button, bool selected)
     {
-        button.BackColor = selected ? Accent : Color.White;
-        button.ForeColor = selected ? Color.White : TextMain;
-        button.FlatAppearance.BorderColor = selected ? Accent : Border;
+        button.BackColor = selected ? Color.FromArgb(239, 246, 255) : Color.White;
+        button.ForeColor = selected ? Accent : TextMain;
+        button.Font = new Font("Microsoft YaHei UI", 9F, selected ? FontStyle.Bold : FontStyle.Regular);
+        button.FlatAppearance.BorderColor = selected ? Color.FromArgb(96, 165, 250) : Border;
     }
 
     private static Button SidebarButton(string text)
     {
-        var button = new Button
+        var button = new ModernButton
         {
             Text = text,
             Height = 36,
             Dock = DockStyle.Fill,
-            BackColor = Color.FromArgb(239, 246, 255),
-            ForeColor = Accent,
-            FlatStyle = FlatStyle.Flat,
+            BackColor = AppBack,
+            ForeColor = TextMain,
             TextAlign = ContentAlignment.MiddleLeft,
-            Padding = new Padding(12, 0, 0, 0),
-            Margin = new Padding(0, 0, 0, 8)
+            Padding = new Padding(14, 0, 0, 0),
+            Margin = new Padding(0, 3, 0, 3),
+            Cursor = Cursors.Hand
         };
-        button.FlatAppearance.BorderSize = 0;
+        button.FlatAppearance.BorderColor = AppBack;
+        button.FlatAppearance.MouseOverBackColor = Color.FromArgb(241, 245, 249);
         return button;
+    }
+
+    private static void StyleSidebarButton(Button button, bool selected)
+    {
+        button.BackColor = selected ? Color.FromArgb(229, 239, 255) : AppBack;
+        button.ForeColor = selected ? Accent : TextMain;
+        button.Font = new Font("Microsoft YaHei UI", 9F, selected ? FontStyle.Bold : FontStyle.Regular);
+        button.FlatAppearance.BorderColor = selected ? Color.FromArgb(191, 219, 254) : AppBack;
     }
 
     private static Control SidebarBrand()
@@ -2174,7 +2527,7 @@ public sealed class MainForm : Form
     {
         var now = DateTime.Now;
         return _events
-            .Where(e => !e.IsGroup)
+            .Where(e => !e.IsGroup && !e.IsProject)
             .Where(e => e.Status is EventStatus.Pending or EventStatus.InProgress || e.NextDueAt(now)?.Date == now.Date)
             .OrderBy(e => e.NextDueAt(now) ?? DateTime.MaxValue)
             .Take(20);
@@ -2184,20 +2537,20 @@ public sealed class MainForm : Form
     {
         var now = DateTime.Now;
         return _events
-            .Where(e => !e.IsGroup)
+            .Where(e => !e.IsGroup && !e.IsProject)
             .Where(e => e.Status is not (EventStatus.Done or EventStatus.Skipped or EventStatus.Cancelled or EventStatus.Postponed))
             .OrderByDescending(e => e.Status is EventStatus.Overdue)
             .ThenBy(e => e.NextDueAt(now) ?? DateTime.MaxValue)
             .Take(20);
     }
 
-    private static NumericUpDown TimeNumber(int max)
+    private static ModernNumericUpDown TimeNumber(int max)
     {
-        return new NumericUpDown
+        return new ModernNumericUpDown
         {
             Minimum = 0,
             Maximum = max,
-            Width = 48,
+            Width = 78,
             TextAlign = HorizontalAlignment.Center
         };
     }
@@ -2268,6 +2621,13 @@ public sealed class MainForm : Form
         Minute,
         Hour,
         Day
+    }
+
+    private enum RecurrenceEditScope
+    {
+        ThisOccurrence,
+        ThisAndFuture,
+        EntireSeries
     }
 
     private static void SelectComboValue<T>(ComboBox box, T value)

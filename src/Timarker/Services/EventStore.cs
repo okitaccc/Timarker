@@ -13,14 +13,17 @@ public sealed class EventStore
     private readonly JsonSerializerOptions _jsonOptions = new() { WriteIndented = true };
 
     public string? RecoveryMessage { get; private set; }
+    public List<PersonProfile> People { get; private set; } = [];
+    public List<ActivityRecord> Records { get; private set; } = [];
+    public List<NoteItem> Notes { get; private set; } = [];
 
-    public EventStore(string? directory = null)
+    public EventStore(string directory)
     {
-        var dir = directory ?? AppPaths.DataDirectory;
-        Directory.CreateDirectory(dir);
-        _filePath = Path.Combine(dir, "events.json");
-        _fallbackPath = Path.Combine(dir, "events.bak");
-        _backupDirectory = Path.Combine(dir, "Backups");
+        ArgumentException.ThrowIfNullOrWhiteSpace(directory);
+        Directory.CreateDirectory(directory);
+        _filePath = Path.Combine(directory, "events.json");
+        _fallbackPath = Path.Combine(directory, "events.bak");
+        _backupDirectory = Path.Combine(directory, "Backups");
     }
 
     public List<EventItem> Load()
@@ -37,13 +40,20 @@ public sealed class EventStore
             foundDataFile = true;
             try
             {
-                var events = Read(candidate);
-                foreach (var item in events) item.NormalizeAfterLoad();
+                var document = Read(candidate);
+                foreach (var item in document.Events) item.NormalizeAfterLoad();
+                foreach (var person in document.People) person.NormalizeAfterLoad();
+                foreach (var record in document.Records) record.NormalizeAfterLoad();
+                foreach (var note in document.Notes) note.NormalizeAfterLoad();
+                if (document.SchemaVersion < 4) MigrateOccasionPeople(document);
+                People = document.People;
+                Records = document.Records;
+                Notes = document.Notes;
                 if (!string.Equals(candidate, _filePath, StringComparison.OrdinalIgnoreCase))
                 {
                     RecoveryMessage = $"主数据文件无法读取，已从备份 {Path.GetFileName(candidate)} 恢复。";
                 }
-                return events;
+                return document.Events;
             }
             catch (JsonException)
             {
@@ -62,11 +72,17 @@ public sealed class EventStore
         return [];
     }
 
-    public void Save(IEnumerable<EventItem> events)
+    public void Save(IEnumerable<EventItem> events, IEnumerable<PersonProfile>? people = null, IEnumerable<ActivityRecord>? records = null, IEnumerable<NoteItem>? notes = null)
     {
         lock (_gate)
         {
-            var document = new StoreDocument { Events = events.ToList() };
+            var document = new StoreDocument
+            {
+                Events = events.ToList(),
+                People = (people ?? People).ToList(),
+                Records = (records ?? Records).ToList(),
+                Notes = (notes ?? Notes).ToList()
+            };
             var tempPath = _filePath + ".tmp";
             try
             {
@@ -88,13 +104,27 @@ public sealed class EventStore
         }
     }
 
-    private List<EventItem> Read(string path)
+    private StoreDocument Read(string path)
     {
         using var stream = File.OpenRead(path);
         using var json = JsonDocument.Parse(stream);
         return json.RootElement.ValueKind is JsonValueKind.Array
-            ? json.RootElement.Deserialize<List<EventItem>>(_jsonOptions) ?? []
-            : json.RootElement.Deserialize<StoreDocument>(_jsonOptions)?.Events ?? [];
+            ? new StoreDocument { SchemaVersion = 1, Events = json.RootElement.Deserialize<List<EventItem>>(_jsonOptions) ?? [] }
+            : json.RootElement.Deserialize<StoreDocument>(_jsonOptions) ?? new StoreDocument();
+    }
+
+    private static void MigrateOccasionPeople(StoreDocument document)
+    {
+        foreach (var item in document.Events.Where(x => (x.Type is EventType.Birthday or EventType.Anniversary) && !string.IsNullOrWhiteSpace(x.SubjectName)))
+        {
+            var person = document.People.FirstOrDefault(x => x.Name.Equals(item.SubjectName.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (person is null)
+            {
+                person = new PersonProfile { Name = item.SubjectName.Trim(), Relationship = item.Relationship.Trim() };
+                document.People.Add(person);
+            }
+            if (!item.PersonIds.Contains(person.Id)) item.PersonIds.Add(person.Id);
+        }
     }
 
     private void CreateRollingBackup()
@@ -112,8 +142,11 @@ public sealed class EventStore
 
     private sealed class StoreDocument
     {
-        public int SchemaVersion { get; set; } = 1;
+        public int SchemaVersion { get; set; } = 5;
         public DateTime SavedAt { get; set; } = DateTime.Now;
         public List<EventItem> Events { get; set; } = [];
+        public List<PersonProfile> People { get; set; } = [];
+        public List<ActivityRecord> Records { get; set; } = [];
+        public List<NoteItem> Notes { get; set; } = [];
     }
 }

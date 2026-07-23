@@ -10,9 +10,9 @@ public sealed class PomodoroForm : Form
     private readonly NotifyIcon _notifyIcon;
     private readonly Label _mode = new();
     private readonly Label _time = new();
-    private readonly NumericUpDown _focusMinutes = MinutesBox(25);
-    private readonly NumericUpDown _breakMinutes = MinutesBox(5);
-    private readonly Button _switchButton = Button("切到休息");
+    private readonly ModernNumericUpDown _focusMinutes = MinutesBox(25);
+    private readonly ModernNumericUpDown _breakMinutes = MinutesBox(5);
+    private readonly Button _switchButton = Button("切到休息", 96, accent: true);
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 1000 };
     private TimeSpan _left = TimeSpan.FromMinutes(25);
     private bool _running;
@@ -99,11 +99,11 @@ public sealed class PomodoroForm : Form
         root.Controls.Add(settings);
 
         var buttons = new FlowLayoutPanel { Anchor = AnchorStyles.None, AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
-        var start = Button("开始 / 暂停");
+        var start = Button("开始 / 暂停", 108, primary: true);
         start.Click += (_, _) => Toggle();
         buttons.Controls.Add(start);
 
-        var reset = Button("重置");
+        var reset = Button("重置", 76);
         reset.Click += (_, _) => ResetCurrent();
         buttons.Controls.Add(reset);
 
@@ -177,9 +177,9 @@ public sealed class PomodoroForm : Form
         _mode.Font = new Font(Font.FontFamily, Math.Max(10, big / 4), FontStyle.Bold);
     }
 
-    private static NumericUpDown MinutesBox(decimal value)
+    private static ModernNumericUpDown MinutesBox(decimal value)
     {
-        return new NumericUpDown
+        return new ModernNumericUpDown
         {
             Minimum = 1,
             Maximum = 180,
@@ -200,19 +200,20 @@ public sealed class PomodoroForm : Form
         };
     }
 
-    private static Button Button(string text)
+    private static Button Button(string text, int width, bool primary = false, bool accent = false)
     {
-        var button = new Button
+        var button = new ModernButton
         {
             Text = text,
-            Height = 32,
-            AutoSize = true,
-            BackColor = Color.White,
-            ForeColor = TextMain,
-            FlatStyle = FlatStyle.Flat,
-            Margin = new Padding(0, 0, 8, 0)
+            Width = width,
+            Height = 38,
+            AutoSize = false,
+            BackColor = primary ? Accent : accent ? Color.FromArgb(239, 246, 255) : Color.White,
+            ForeColor = primary ? Color.White : accent ? Accent : TextMain,
+            Margin = new Padding(0, 0, 10, 0),
+            Cursor = Cursors.Hand
         };
-        button.FlatAppearance.BorderColor = Accent;
+        button.FlatAppearance.BorderColor = primary ? Accent : accent ? Color.FromArgb(147, 197, 253) : Color.FromArgb(203, 213, 225);
         return button;
     }
 }

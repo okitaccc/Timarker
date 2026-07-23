@@ -12,12 +12,13 @@ public enum ReminderDialogAction
 
 public sealed class ReminderDialog : Form
 {
-    private readonly NumericUpDown _minutesBox = new()
+    private readonly ModernNumericUpDown _minutesBox = new()
     {
         Minimum = 1,
         Maximum = 1440,
         Increment = 5,
-        Width = 86
+        Width = 104,
+        Height = 32
     };
 
     public ReminderDialogAction SelectedAction { get; private set; } = ReminderDialogAction.Ignore;
@@ -51,7 +52,7 @@ public sealed class ReminderDialog : Form
         };
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
 
         root.Controls.Add(new Label
@@ -70,22 +71,35 @@ public sealed class ReminderDialog : Form
             ForeColor = Color.FromArgb(31, 41, 55)
         });
 
-        var minutes = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
+        var minutes = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 4,
+            RowCount = 1,
+            Margin = Padding.Empty
+        };
+        minutes.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 76));
+        minutes.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
+        minutes.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 48));
+        minutes.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         minutes.Controls.Add(new Label
         {
             Text = "稍后/延期",
-            AutoSize = true,
-            Padding = new Padding(0, 8, 8, 0),
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft,
             ForeColor = Color.FromArgb(107, 114, 128)
-        });
-        minutes.Controls.Add(_minutesBox);
+        }, 0, 0);
+        _minutesBox.Anchor = AnchorStyles.Left;
+        _minutesBox.Margin = Padding.Empty;
+        minutes.Controls.Add(_minutesBox, 1, 0);
         minutes.Controls.Add(new Label
         {
             Text = "分钟",
-            AutoSize = true,
-            Padding = new Padding(4, 8, 0, 0),
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Padding = new Padding(6, 0, 0, 0),
             ForeColor = Color.FromArgb(107, 114, 128)
-        });
+        }, 2, 0);
         root.Controls.Add(minutes);
 
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, WrapContents = false };

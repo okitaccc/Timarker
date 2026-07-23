@@ -41,6 +41,75 @@ internal static class L
         ["推荐优先"] = "Recommended",
         ["日历视图"] = "Calendar",
         ["收藏夹"] = "Collections",
+        ["项目"] = "Projects",
+        ["人物"] = "People",
+        ["记录"] = "History",
+        ["便签"] = "Notes",
+        ["新建便签"] = "New note",
+        ["新便签"] = "New note",
+        ["编辑便签"] = "Edit note",
+        ["保存便签"] = "Save note",
+        ["删除便签"] = "Delete note",
+        ["置顶"] = "Pin",
+        ["取消置顶"] = "Unpin",
+        ["置顶这张便签"] = "Pin this note",
+        ["工作"] = "Work",
+        ["学习"] = "Study",
+        ["普通"] = "General",
+        ["标题"] = "Title",
+        ["内容"] = "Content",
+        ["类型"] = "Type",
+        ["整理"] = "Organize",
+        ["搜索便签内容或词条"] = "Search notes or tags",
+        ["搜索标题、内容或词条"] = "Search title, content, or tags",
+        ["一句话概括，可不填"] = "Optional short title",
+        ["写下想法、进展或待整理的内容……"] = "Write an idea, progress, or something to organize…",
+        ["先记下来，不必马上安排时间。"] = "Capture it now. Scheduling can wait.",
+        ["先记下来，需要时再把它变成行动。"] = "Capture it now. Turn it into action when needed.",
+        ["写点什么……"] = "Write something…",
+        ["标题（可选）"] = "Title (optional)",
+        ["添加词条（可选）"] = "Add tags (optional)",
+        ["全部便签"] = "All notes",
+        ["其他"] = "Others",
+        ["还没有便签。点击上方输入框，先记下一件事。"] = "No notes yet. Use the field above to capture something.",
+        ["没有找到相关便签。"] = "No matching notes.",
+        ["至少写下一点内容。"] = "Write something first.",
+        ["便签是空的"] = "Empty note",
+        ["删除这张便签？"] = "Delete this note?",
+        ["未命名便签"] = "Untitled note",
+        ["便签不会显示时间，也不会计入记录统计。"] = "Notes do not show time or count toward history stats.",
+        ["清空"] = "Clear",
+        ["回看完成的事，也看见自己走了多远。"] = "Look back on what you finished and how far you have come.",
+        ["每日记录"] = "Daily activity",
+        ["过去一年"] = "Past year",
+        ["一"] = "Mon",
+        ["三"] = "Wed",
+        ["五"] = "Fri",
+        ["少"] = "Less",
+        ["多"] = "More",
+        ["当日清空"] = "All done",
+        ["补一条记录"] = "Add a record",
+        ["适合补记工作成果或学习收获。"] = "Add a work result or learning takeaway.",
+        ["发生了什么"] = "What happened",
+        ["补充"] = "Details",
+        ["记录时间"] = "Recorded at",
+        ["例如：完成了周报初稿"] = "e.g. Finished the first weekly report draft",
+        ["补充成果、收获或下一步，可不填"] = "Optional result, takeaway, or next step",
+        ["重要时刻"] = "Milestones",
+        ["完成项目"] = "Projects",
+        ["连续记录"] = "Streak",
+        ["庆祝生日"] = "Celebrated a birthday",
+        ["纪念重要日子"] = "Marked an important day",
+        ["完成事项"] = "Completed event",
+        ["手动记录"] = "Manual record",
+        ["完成事项、项目或庆祝重要日子时，会自动留下记录。"] = "Completing events, projects, or milestones adds a record automatically.",
+        ["添加人物"] = "Add person",
+        ["关联事项"] = "Link events",
+        ["编辑资料"] = "Edit profile",
+        ["删除人物"] = "Delete person",
+        ["写一条记录"] = "Add a record",
+        ["保存记录"] = "Save record",
+        ["保存关联"] = "Save links",
         ["番茄钟"] = "Pomodoro",
         ["新建事项"] = "New event",
         ["先填写必要信息，其他设置按需展开。"] = "Start with the essentials. Expand the rest when needed.",
@@ -92,6 +161,32 @@ internal static class L
         ["未选择截止日期"] = "No deadline",
         ["重复"] = "Repeat",
         ["重复规则"] = "Repeat rule",
+        ["重复方式"] = "Repeat pattern",
+        ["按间隔重复"] = "Repeat at an interval",
+        ["每个工作日"] = "Every weekday",
+        ["每周指定星期"] = "Selected weekdays",
+        ["每月第几个星期"] = "Monthly by weekday",
+        ["每月最后一天"] = "Last day of each month",
+        ["每年农历日期"] = "Yearly on lunar date",
+        ["永不结束"] = "Never ends",
+        ["截止到日期"] = "End on date",
+        ["发生指定次数"] = "After number of occurrences",
+        ["错过后"] = "If missed",
+        ["补提醒最近一次"] = "Remind me of the latest missed occurrence",
+        ["直接跳到下一次"] = "Skip to the next occurrence",
+        ["结束重复"] = "End recurrence",
+        ["第一个"] = "First",
+        ["第二个"] = "Second",
+        ["第三个"] = "Third",
+        ["第四个"] = "Fourth",
+        ["最后一个"] = "Last",
+        ["周一"] = "Mon",
+        ["周二"] = "Tue",
+        ["周三"] = "Wed",
+        ["周四"] = "Thu",
+        ["周五"] = "Fri",
+        ["周六"] = "Sat",
+        ["周日"] = "Sun",
         ["再次提醒"] = "Remind again",
         ["最多提醒"] = "Maximum reminders",
         ["延后"] = "Snooze",
@@ -130,7 +225,17 @@ internal static class L
         ["完成"] = "Complete",
         ["完成本次"] = "Complete this occurrence",
         ["跳过本次"] = "Skip this occurrence",
-        ["结束重复"] = "End recurrence",
+        ["暂停重复"] = "Pause recurrence",
+        ["恢复重复"] = "Resume recurrence",
+        ["编辑周期事项"] = "Edit recurring event",
+        ["要修改哪些事件？"] = "Which events should change?",
+        ["选择修改范围。已完成和已跳过的历史记录不会被改动。"] = "Choose a scope. Completed and skipped history stays unchanged.",
+        ["仅本次"] = "This occurrence",
+        ["本次及以后"] = "This and future occurrences",
+        ["整个系列"] = "Entire series",
+        ["把当前一次作为独立事项修改"] = "Edit this occurrence as a standalone event",
+        ["保留过去记录，从本次开始使用新规则"] = "Keep the past and use new rules from this occurrence",
+        ["修改这个周期事项的全部规则"] = "Update all rules for this recurring event",
         ["添加到收藏夹"] = "Add to collection",
         ["新建收藏夹并加入"] = "Create collection and add",
         ["根据词条组合"] = "Create collection from tag",
@@ -149,6 +254,31 @@ internal static class L
         ["全部词条"] = "All tags",
         ["重命名收藏夹"] = "Rename collection",
         ["编辑事件"] = "Edit event",
+        ["编辑项目步骤"] = "Edit project step",
+        ["步骤会同步显示在时间线、日历与提醒中。"] = "The step also appears in the timeline, calendar, and reminders.",
+        ["项目摘要"] = "Project summary",
+        ["新增步骤"] = "Add step",
+        ["完成步骤"] = "Complete step",
+        ["上移"] = "Move up",
+        ["下移"] = "Move down",
+        ["编辑项目"] = "Edit project",
+        ["顺延计划"] = "Shift schedule",
+        ["删除项目"] = "Delete project",
+        ["新建项目"] = "New project",
+        ["项目名称"] = "Project name",
+        ["项目说明"] = "Project notes",
+        ["总体截止日期"] = "Overall deadline",
+        ["下一步行动"] = "Next action",
+        ["移出项目"] = "Remove from project",
+        ["未设置总体截止日期"] = "No overall deadline",
+        ["保存项目"] = "Save project",
+        ["确认顺延"] = "Shift schedule",
+        ["清除日期"] = "Clear date",
+        ["仅删除项目"] = "Delete project only",
+        ["步骤保留为普通事项"] = "Keep its steps as standard events",
+        ["删除项目和步骤"] = "Delete project and steps",
+        ["同时删除项目内的全部步骤"] = "Also delete every step in this project",
+        ["请选择项目步骤的处理方式。"] = "Choose what happens to the project steps.",
         ["修改后会同步更新日历、收藏夹与提醒。"] = "Changes update the calendar, collections, and reminders.",
         ["基本信息"] = "BASIC INFO",
         ["词条与备注"] = "TAGS & NOTES",
@@ -192,6 +322,14 @@ internal static class L
         ["出生年份"] = "Birth year",
         ["农历闰月"] = "Lunar leap month",
         ["关闭事刻"] = "Close Timarker",
+        ["关闭 Timarker"] = "Close Timarker",
+        ["关闭窗口"] = "Close window",
+        ["请选择关闭主窗口后的操作。"] = "Choose what happens after closing the main window.",
+        ["最小化到系统托盘"] = "Minimize to system tray",
+        ["Timarker 将继续在后台运行，并按计划发送提醒。"] = "Timarker will keep running in the background and send scheduled reminders.",
+        ["退出 Timarker"] = "Exit Timarker",
+        ["结束程序，关闭后将不再发送提醒。"] = "Exit the app and stop all scheduled reminders.",
+        ["记住我的选择，以后不再询问"] = "Remember my choice and don't ask again",
         ["关闭窗口后，你希望事刻怎么运行？"] = "What should Timarker do when you close the window?",
         ["最小化到系统托盘后，提醒会继续在后台工作；退出程序后，将不会再触发提醒。"] = "Reminders continue in the system tray. Exiting stops all reminders."
     };
@@ -207,12 +345,15 @@ internal static class L
     {
         root.Text = T(root.Text);
         if (root is TextBox textBox) textBox.PlaceholderText = T(textBox.PlaceholderText);
+        if (root is ModernTextBox modernTextBox) modernTextBox.PlaceholderText = T(modernTextBox.PlaceholderText);
         if (root.ContextMenuStrip is not null) Apply(root.ContextMenuStrip);
+        ModernUi.Style(root);
         foreach (Control child in root.Controls) Apply(child);
     }
 
     public static void Apply(ContextMenuStrip menu)
     {
+        ModernUi.Style(menu);
         Apply(menu.Items);
         menu.Opening -= TranslateMenuOnOpening;
         menu.Opening += TranslateMenuOnOpening;
@@ -228,7 +369,19 @@ internal static class L
         foreach (ToolStripItem item in items)
         {
             item.Text = T(item.Text ?? string.Empty);
-            if (item is ToolStripDropDownItem dropDown) Apply(dropDown.DropDownItems);
+            if (item is ToolStripSeparator)
+            {
+                item.Margin = new Padding(6, 4, 6, 4);
+            }
+            else
+            {
+                item.Padding = new Padding(8, 5, 8, 5);
+            }
+            if (item is ToolStripDropDownItem dropDown)
+            {
+                ModernUi.Style(dropDown.DropDown);
+                Apply(dropDown.DropDownItems);
+            }
         }
     }
 }

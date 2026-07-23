@@ -10,45 +10,46 @@ public sealed class EventEditForm : Form
     private static readonly Color Accent = Color.FromArgb(37, 99, 235);
     private static readonly Color Border = Color.FromArgb(226, 232, 240);
     private readonly EventItem _item;
-    private readonly TextBox _title = new() { Dock = DockStyle.Fill };
-    private readonly TextBox _notes = new() { Dock = DockStyle.Fill, Multiline = true, Height = 86 };
+    private readonly bool _projectStep;
+    private readonly ModernTextBox _title = new() { Dock = DockStyle.Fill };
+    private readonly ModernTextBox _notes = new() { Dock = DockStyle.Fill, Multiline = true, Height = 86 };
     private readonly TagEditor _tags = new() { Height = 124 };
     private readonly CommonTagPicker _categories = new();
-    private readonly ComboBox _type = new() { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly ComboBox _status = new() { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly ComboBox _repeatUnit = new() { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly NumericUpDown _repeatEvery = new() { Dock = DockStyle.Fill, Minimum = 1, Maximum = 365, Value = 1 };
-    private readonly TextBox _subjectName = new() { Dock = DockStyle.Fill, PlaceholderText = "例如：妈妈、我们、入职" };
-    private readonly TextBox _relationship = new() { Dock = DockStyle.Fill, PlaceholderText = "例如：家人、伴侣、工作" };
-    private readonly ComboBox _birthdayCalendar = new() { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly ComboBox _birthdayLeapDayRule = new() { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ComboBox _type = new ModernComboBox { Dock = DockStyle.Fill };
+    private readonly ComboBox _status = new ModernComboBox { Dock = DockStyle.Fill };
+    private readonly RecurrenceEditor _recurrence = new();
+    private readonly ModernTextBox _subjectName = new() { Dock = DockStyle.Fill, PlaceholderText = "例如：妈妈、我们、入职" };
+    private readonly ModernTextBox _relationship = new() { Dock = DockStyle.Fill, PlaceholderText = "例如：家人、伴侣、工作" };
+    private readonly ComboBox _birthdayCalendar = new ModernComboBox { Dock = DockStyle.Fill };
+    private readonly ComboBox _birthdayLeapDayRule = new ModernComboBox { Dock = DockStyle.Fill };
     private readonly CheckBox _birthdayYearKnown = new() { Text = "显示年龄（已知出生年份）", Checked = true, AutoSize = true };
     private readonly CheckBox _birthdayIsLeapMonth = new() { Text = "这是闰月生日", AutoSize = true };
-    private readonly ComboBox _anniversaryMode = new() { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly TextBox _milestoneDays = new() { Dock = DockStyle.Fill, PlaceholderText = "例如：10, 100, 365, 520, 1000" };
+    private readonly ComboBox _anniversaryMode = new ModernComboBox { Dock = DockStyle.Fill };
+    private readonly ModernTextBox _milestoneDays = new() { Dock = DockStyle.Fill, PlaceholderText = "例如：10, 100, 365, 520, 1000" };
     private readonly CheckBox _hasStart = new() { Text = "开始时间" };
-    private readonly Button _dateRange = new() { Dock = DockStyle.Fill, Height = 38 };
+    private readonly Button _dateRange = new ModernButton() { Dock = DockStyle.Fill, Height = 38 };
     private readonly DateTimePicker _startDate = DateBox();
-    private readonly NumericUpDown _startHour = NumberBox(23);
-    private readonly NumericUpDown _startMinute = NumberBox(59);
+    private readonly ModernNumericUpDown _startHour = NumberBox(23);
+    private readonly ModernNumericUpDown _startMinute = NumberBox(59);
     private readonly CheckBox _hasDeadline = new() { Text = "截止时间" };
     private readonly DateTimePicker _deadlineDate = DateBox();
-    private readonly NumericUpDown _deadlineHour = NumberBox(23);
-    private readonly NumericUpDown _deadlineMinute = NumberBox(59);
-    private readonly NumericUpDown _reminderLead = ReminderBox(365);
-    private readonly ComboBox _reminderLeadUnit = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 72 };
-    private readonly NumericUpDown _reminderRepeatMinutes = ReminderBox(365, 10, 1);
-    private readonly ComboBox _reminderRepeatUnit = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 72 };
-    private readonly NumericUpDown _reminderRepeatCount = ReminderBox(20);
+    private readonly ModernNumericUpDown _deadlineHour = NumberBox(23);
+    private readonly ModernNumericUpDown _deadlineMinute = NumberBox(59);
+    private readonly ModernNumericUpDown _reminderLead = ReminderBox(365);
+    private readonly ComboBox _reminderLeadUnit = new ModernComboBox { Width = 72 };
+    private readonly ModernNumericUpDown _reminderRepeatMinutes = ReminderBox(365, 10, 1);
+    private readonly ComboBox _reminderRepeatUnit = new ModernComboBox { Width = 72 };
+    private readonly ModernNumericUpDown _reminderRepeatCount = ReminderBox(20);
     private Control? _occasionPanel;
     private Control? _birthdayPanel;
     private Control? _anniversaryPanel;
     private Control? _repeatPanel;
 
-    public EventEditForm(EventItem item)
+    public EventEditForm(EventItem item, bool projectStep = false)
     {
         _item = item;
-        Text = "编辑事件";
+        _projectStep = projectStep;
+        Text = projectStep ? "编辑项目步骤" : "编辑事件";
         Width = 700;
         Height = 780;
         MinimumSize = new Size(620, 680);
@@ -66,10 +67,13 @@ public sealed class EventEditForm : Form
         AddOption(_type, "到点开始", EventType.StartAt);
         AddOption(_type, "截止事项", EventType.Deadline);
         AddOption(_type, "时间段", EventType.TimeWindow);
-        AddOption(_type, "周期事项", EventType.Recurring);
-        AddOption(_type, "习惯", EventType.Habit);
-        AddOption(_type, "生日提醒", EventType.Birthday);
-        AddOption(_type, "纪念日", EventType.Anniversary);
+        if (!_projectStep)
+        {
+            AddOption(_type, "周期事项", EventType.Recurring);
+            AddOption(_type, "习惯", EventType.Habit);
+            AddOption(_type, "生日提醒", EventType.Birthday);
+            AddOption(_type, "纪念日", EventType.Anniversary);
+        }
         AddOption(_type, "可能要做", EventType.Maybe);
 
         AddOption(_status, "待处理", EventStatus.Pending);
@@ -86,17 +90,13 @@ public sealed class EventEditForm : Form
         AddOption(_birthdayCalendar, "阴历", CalendarKind.Lunar);
         AddOption(_birthdayLeapDayRule, "按 2 月 28 日提醒", LeapDayRule.February28);
         AddOption(_birthdayLeapDayRule, "按 3 月 1 日提醒", LeapDayRule.March1);
-        AddOption(_repeatUnit, "天", RepeatUnit.Day);
-        AddOption(_repeatUnit, "周", RepeatUnit.Week);
-        AddOption(_repeatUnit, "月", RepeatUnit.Month);
-        AddOption(_repeatUnit, "年", RepeatUnit.Year);
         foreach (var unit in new[] { _reminderLeadUnit, _reminderRepeatUnit })
         {
             AddOption(unit, "分钟", ReminderUnit.Minute);
             AddOption(unit, "小时", ReminderUnit.Hour);
             AddOption(unit, "天", ReminderUnit.Day);
         }
-        foreach (var control in new Control[] { _title, _notes, _type, _status, _repeatUnit, _repeatEvery, _subjectName, _relationship, _birthdayCalendar, _birthdayLeapDayRule, _anniversaryMode, _milestoneDays })
+        foreach (var control in new Control[] { _title, _notes, _type, _status, _subjectName, _relationship, _birthdayCalendar, _birthdayLeapDayRule, _anniversaryMode, _milestoneDays })
         {
             control.BackColor = Color.White;
             if (control is ComboBox combo) combo.FlatStyle = FlatStyle.Flat;
@@ -121,8 +121,8 @@ public sealed class EventEditForm : Form
         var header = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 1, Margin = Padding.Empty };
         header.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
         header.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
-        header.Controls.Add(new Label { Text = "编辑事件", Dock = DockStyle.Fill, Font = new Font(Font.FontFamily, 16F, FontStyle.Bold), ForeColor = TextMain });
-        header.Controls.Add(new Label { Text = "修改后会同步更新日历、收藏夹与提醒。", Dock = DockStyle.Fill, ForeColor = TextMuted });
+        header.Controls.Add(new Label { Text = _projectStep ? "编辑项目步骤" : "编辑事件", Dock = DockStyle.Fill, Font = new Font(Font.FontFamily, 16F, FontStyle.Bold), ForeColor = TextMain });
+        header.Controls.Add(new Label { Text = _projectStep ? "步骤会同步显示在时间线、日历与提醒中。" : "修改后会同步更新日历、收藏夹与提醒。", Dock = DockStyle.Fill, ForeColor = TextMuted });
         shell.Controls.Add(header, 0, 0);
 
         var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = Color.White, Padding = new Padding(22, 12, 22, 18) };
@@ -141,7 +141,7 @@ public sealed class EventEditForm : Form
         AddSection(form, "基本信息");
         AddField(form, "事项名称", _title);
         AddWide(form, TwoFields(("事项类型", (Control)_type), ("当前状态", _status)));
-        _repeatPanel = TwoFields(("重复单位", (Control)_repeatUnit), ("每隔", _repeatEvery));
+        _repeatPanel = _recurrence;
         AddWide(form, _repeatPanel);
 
         AddSection(form, "日期与提醒");
@@ -203,8 +203,7 @@ public sealed class EventEditForm : Form
         SetCategories($"{_item.Tags}, {_item.Categories}");
         SelectComboValue(_type, _item.Type);
         SelectComboValue(_status, _item.Status);
-        SelectComboValue(_repeatUnit, _item.RepeatUnit is RepeatUnit.None ? RepeatUnit.Day : _item.RepeatUnit);
-        _repeatEvery.Value = Math.Min(_repeatEvery.Maximum, Math.Max(_repeatEvery.Minimum, _item.RepeatEvery));
+        _recurrence.LoadFrom(_item);
         SelectComboValue(_anniversaryMode, _item.AnniversaryMode);
         SelectComboValue(_birthdayCalendar, _item.BirthdayCalendar);
         SelectComboValue(_birthdayLeapDayRule, _item.BirthdayLeapDayRule);
@@ -250,6 +249,12 @@ public sealed class EventEditForm : Form
             MessageBox.Show("截止时间不能早于开始时间。", "时间设置有误", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
+        if (selectedType is EventType.Recurring or EventType.Habit
+            && !_recurrence.ApplyTo(_item, startAt, out var recurrenceError))
+        {
+            MessageBox.Show(recurrenceError, "重复规则有误", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
 
         _item.Title = _title.Text.Trim();
         _item.Notes = _notes.Text.Trim();
@@ -257,11 +262,7 @@ public sealed class EventEditForm : Form
         _item.Categories = "";
         _item.Type = selectedType;
         _item.Status = SelectedValue<EventStatus>(_status);
-        if (_item.Type is EventType.Recurring or EventType.Habit)
-        {
-            _item.RepeatUnit = SelectedValue<RepeatUnit>(_repeatUnit);
-            _item.RepeatEvery = (int)_repeatEvery.Value;
-        }
+        if (_item.Type is not (EventType.Recurring or EventType.Habit)) _item.RepeatUnit = RepeatUnit.None;
         _item.AnniversaryMode = SelectedValue<AnniversaryMode>(_anniversaryMode);
         _item.MilestoneDays = _milestoneDays.Text.Trim();
         _item.SubjectName = _subjectName.Text.Trim();
@@ -379,7 +380,7 @@ public sealed class EventEditForm : Form
         return button;
     }
 
-    private static Control TimePanel(NumericUpDown hour, NumericUpDown minute)
+    private static Control TimePanel(ModernNumericUpDown hour, ModernNumericUpDown minute)
     {
         var panel = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
         panel.Controls.Add(hour);
@@ -445,20 +446,20 @@ public sealed class EventEditForm : Form
         return panel;
     }
 
-    private static NumericUpDown NumberBox(int max) => new()
+    private static ModernNumericUpDown NumberBox(int max) => new()
     {
         Minimum = 0,
         Maximum = max,
-        Width = 54,
+        Width = 78,
         TextAlign = HorizontalAlignment.Center
     };
 
-    private static NumericUpDown ReminderBox(int max, int value = 0, int min = 0) => new()
+    private static ModernNumericUpDown ReminderBox(int max, int value = 0, int min = 0) => new()
     {
         Minimum = min,
         Maximum = max,
         Value = value,
-        Width = 72,
+        Width = 82,
         TextAlign = HorizontalAlignment.Center
     };
 
@@ -470,19 +471,19 @@ public sealed class EventEditForm : Form
         Margin = new Padding(8, 8, 0, 0)
     };
 
-    private static DateTime BuildTime(DateTimePicker date, NumericUpDown hour, NumericUpDown minute)
+    private static DateTime BuildTime(DateTimePicker date, ModernNumericUpDown hour, ModernNumericUpDown minute)
     {
         return date.Value.Date.AddHours((double)hour.Value).AddMinutes((double)minute.Value);
     }
 
-    private static void SetTime(DateTime value, DateTimePicker date, NumericUpDown hour, NumericUpDown minute)
+    private static void SetTime(DateTime value, DateTimePicker date, ModernNumericUpDown hour, ModernNumericUpDown minute)
     {
         date.Value = value.Date;
         hour.Value = value.Hour;
         minute.Value = value.Minute;
     }
 
-    private static void SetReminderDuration(NumericUpDown value, ComboBox unit, int minutes)
+    private static void SetReminderDuration(ModernNumericUpDown value, ComboBox unit, int minutes)
     {
         var selectedUnit = minutes > 0 && minutes % 1440 == 0 ? ReminderUnit.Day
             : minutes > 0 && minutes % 60 == 0 ? ReminderUnit.Hour
@@ -491,7 +492,7 @@ public sealed class EventEditForm : Form
         value.Value = Math.Min(value.Maximum, Math.Max(value.Minimum, minutes / UnitMinutes(selectedUnit)));
     }
 
-    private static int ReminderMinutes(NumericUpDown value, ComboBox unit) =>
+    private static int ReminderMinutes(ModernNumericUpDown value, ComboBox unit) =>
         (int)value.Value * UnitMinutes(SelectedValue<ReminderUnit>(unit));
 
     private static int UnitMinutes(ReminderUnit unit) => unit switch

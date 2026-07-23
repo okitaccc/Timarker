@@ -42,6 +42,29 @@ public enum RepeatUnit
     Year
 }
 
+public enum RepeatPattern
+{
+    Interval,
+    Weekdays,
+    SelectedWeekdays,
+    MonthlyNthWeekday,
+    MonthlyLastDay,
+    LunarYearly
+}
+
+public enum RecurrenceEndMode
+{
+    Never,
+    OnDate,
+    AfterCount
+}
+
+public enum MissedOccurrencePolicy
+{
+    RemindLatest,
+    SkipToNext
+}
+
 public enum CalendarKind
 {
     Solar,
@@ -86,8 +109,12 @@ public sealed class EventItem
     public EventStatus Status { get; set; } = EventStatus.Pending;
     public EventPriority Priority { get; set; } = EventPriority.Normal;
     public bool IsGroup { get; set; }
+    public bool IsProject { get; set; }
     public Guid? ParentId { get; set; }
+    public Guid? ProjectId { get; set; }
+    public int ProjectOrder { get; set; }
     public List<Guid> FolderIds { get; set; } = [];
+    public List<Guid> PersonIds { get; set; } = [];
 
     public bool IsInFolder(Guid folderId) => ParentId == folderId || FolderIds.Contains(folderId);
 
@@ -113,6 +140,15 @@ public sealed class EventItem
     public DateTime? DeadlineAt { get; set; }
     public RepeatUnit RepeatUnit { get; set; } = RepeatUnit.None;
     public int RepeatEvery { get; set; } = 1;
+    public RepeatPattern RepeatPattern { get; set; }
+    public List<DayOfWeek> RepeatDaysOfWeek { get; set; } = [];
+    public int RepeatWeekOfMonth { get; set; } = 1;
+    public DayOfWeek RepeatDayOfWeek { get; set; } = DayOfWeek.Monday;
+    public RecurrenceEndMode RecurrenceEndMode { get; set; }
+    public DateTime? RepeatUntil { get; set; }
+    public int RepeatCount { get; set; }
+    public bool IsRecurrencePaused { get; set; }
+    public MissedOccurrencePolicy MissedOccurrencePolicy { get; set; }
     public List<EventOccurrence> Occurrences { get; set; } = [];
     public CalendarKind BirthdayCalendar { get; set; } = CalendarKind.Solar;
     public int? BirthdayMonth { get; set; }
@@ -142,7 +178,10 @@ public sealed class EventItem
 
     public DateTime? NextDueAt(DateTime now)
     {
-        if (Status is EventStatus.Cancelled || (!IsRecurringSeries && Status is (EventStatus.Done or EventStatus.Skipped)))
+        if (IsProject
+            || Status is EventStatus.Cancelled
+            || IsRecurringSeries && IsRecurrencePaused
+            || (!IsRecurringSeries && Status is (EventStatus.Done or EventStatus.Skipped)))
         {
             return null;
         }
@@ -218,7 +257,7 @@ public sealed class EventItem
     public void Complete(DateTime? handledAt = null)
     {
         var now = handledAt ?? DateTime.Now;
-        if (IsRecurringSeries)
+        if (IsRecurringSeries || Type is EventType.Birthday or EventType.Anniversary)
         {
             RecordOccurrence(EventStatus.Done, now);
             Status = EventStatus.Pending;
@@ -235,7 +274,7 @@ public sealed class EventItem
     public void SkipOccurrence(DateTime? handledAt = null)
     {
         var now = handledAt ?? DateTime.Now;
-        if (IsRecurringSeries)
+        if (IsRecurringSeries || Type is EventType.Birthday or EventType.Anniversary)
         {
             RecordOccurrence(EventStatus.Skipped, now);
             Status = EventStatus.Pending;
@@ -254,6 +293,59 @@ public sealed class EventItem
         Status = EventStatus.Cancelled;
         SnoozedUntil = null;
         UpdatedAt = DateTime.Now;
+    }
+
+    public void SetRecurrencePaused(bool paused)
+    {
+        IsRecurrencePaused = paused;
+        ResetReminderState();
+        UpdatedAt = DateTime.Now;
+    }
+
+    public void SkipOccurrenceAt(DateTime scheduledAt)
+    {
+        var occurrence = FindOccurrence(scheduledAt) ?? new EventOccurrence { ScheduledAt = scheduledAt };
+        if (!Occurrences.Contains(occurrence)) Occurrences.Add(occurrence);
+        occurrence.Status = EventStatus.Skipped;
+        occurrence.HandledAt = DateTime.Now;
+        ResetReminderState();
+        UpdatedAt = DateTime.Now;
+    }
+
+    public void EndBefore(DateTime occurrence)
+    {
+        RecurrenceEndMode = RecurrenceEndMode.OnDate;
+        RepeatUntil = occurrence.Date.AddDays(-1);
+        UpdatedAt = DateTime.Now;
+    }
+
+    public void ResetAsNewSeries()
+    {
+        Id = Guid.NewGuid();
+        Occurrences = [];
+        Status = EventStatus.Pending;
+        IsRecurrencePaused = false;
+        ReminderSentCount = 0;
+        LastReminderAt = null;
+        SnoozedUntil = null;
+        CreatedAt = DateTime.Now;
+        UpdatedAt = DateTime.Now;
+    }
+
+    public void DetachFromSeries()
+    {
+        ResetAsNewSeries();
+        Type = DeadlineAt is not null && StartAt is not null
+            ? EventType.TimeWindow
+            : DeadlineAt is not null
+                ? EventType.Deadline
+                : EventType.StartAt;
+        RepeatUnit = RepeatUnit.None;
+        RepeatPattern = RepeatPattern.Interval;
+        RepeatDaysOfWeek = [];
+        RecurrenceEndMode = RecurrenceEndMode.Never;
+        RepeatUntil = null;
+        RepeatCount = 0;
     }
 
     public void SnoozeUntil(DateTime value)
@@ -410,7 +502,7 @@ public sealed class EventItem
         {
             var year = Math.Max(now.Year, StartAt.Value.Year + 1);
             var annual = StartAt.Value.AddYears(year - StartAt.Value.Year);
-            if (annual < now)
+            if (annual.Date < now.Date || IsOccurrenceHandled(annual))
             {
                 annual = annual.AddYears(1);
             }
@@ -419,7 +511,9 @@ public sealed class EventItem
 
         if (AnniversaryMode is AnniversaryMode.Days or AnniversaryMode.Both)
         {
-            candidates.AddRange(ParseMilestones().Select(days => StartAt.Value.AddDays(days)).Where(date => date >= now));
+            candidates.AddRange(ParseMilestones()
+                .Select(days => StartAt.Value.AddDays(days))
+                .Where(date => date.Date >= now.Date && !IsOccurrenceHandled(date)));
         }
         return candidates.Count == 0 ? null : candidates.Min();
     }
@@ -429,6 +523,32 @@ public sealed class EventItem
         .Select(value => int.TryParse(value, out var days) ? days : 0)
         .Where(days => days > 0)
         .Distinct();
+
+    public DateTime? CurrentOrNextOccurrenceAt(DateTime now) => NextRecurringAt(now);
+
+    public bool OccursOn(DateTime day) => OccurrenceOn(day) is not null;
+
+    public DateTime? OccurrenceOn(DateTime day)
+    {
+        if (!IsRecurringSeries || Status is EventStatus.Cancelled)
+        {
+            var due = NextDueAt(day.Date.AddDays(1).AddTicks(-1));
+            return due?.Date == day.Date ? due : null;
+        }
+
+        var occurrence = FirstRecurringAt();
+        var index = 1;
+        var end = day.Date.AddDays(1);
+        while (occurrence is not null && occurrence < end && index <= 100_000)
+        {
+            if (!IsOccurrenceAllowed(occurrence.Value, index)) return null;
+            var stored = FindOccurrence(occurrence.Value);
+            if ((stored?.EffectiveAt ?? occurrence.Value).Date == day.Date) return occurrence;
+            occurrence = NextRecurringAfter(occurrence.Value);
+            index++;
+        }
+        return Occurrences.FirstOrDefault(x => x.EffectiveAt.Date == day.Date)?.ScheduledAt;
+    }
 
     private DateTime? NextRecurringAt(DateTime now)
     {
@@ -444,38 +564,79 @@ public sealed class EventItem
         if (adjusted is not null) return adjusted.EffectiveAt;
 
         var current = CurrentRecurringAt(now);
-        if (current is not null && FindOccurrence(current.Value)?.IsHandled is not true) return current;
-
-        var next = current is null ? StartAt.Value : AddRepeat(current.Value);
-        while (FindOccurrence(next)?.IsHandled is true)
+        if (current is not null
+            && MissedOccurrencePolicy is MissedOccurrencePolicy.SkipToNext
+            && current.Value.ScheduledAt.Date < now.Date)
         {
-            var following = AddRepeat(next);
-            if (following == next) break;
-            next = following;
+            var future = NextRecurringAfter(current.Value.ScheduledAt);
+            var futureIndex = current.Value.Index + 1;
+            while (future is not null && future.Value.Date < now.Date && IsOccurrenceAllowed(future.Value, futureIndex))
+            {
+                future = NextRecurringAfter(future.Value);
+                futureIndex++;
+            }
+            return future is not null && IsOccurrenceAllowed(future.Value, futureIndex) ? future : null;
         }
-        return next;
+        if (current is not null && FindOccurrence(current.Value.ScheduledAt)?.IsHandled is not true)
+        {
+            return current.Value.ScheduledAt;
+        }
+
+        var next = current is null ? FirstRecurringAt() : NextRecurringAfter(current.Value.ScheduledAt);
+        var index = current?.Index + 1 ?? 1;
+        while (next is not null && IsOccurrenceAllowed(next.Value, index) && FindOccurrence(next.Value)?.IsHandled is true)
+        {
+            next = NextRecurringAfter(next.Value);
+            index++;
+        }
+        return next is not null && IsOccurrenceAllowed(next.Value, index) ? next : null;
     }
 
-    private DateTime? CurrentRecurringAt(DateTime now)
+    private (DateTime ScheduledAt, int Index)? CurrentRecurringAt(DateTime now)
     {
         if (StartAt is null || RepeatUnit is RepeatUnit.None || StartAt > now)
         {
             return null;
         }
 
-        var current = StartAt.Value;
-        while (true)
+        var current = FirstRecurringAt();
+        var index = 1;
+        (DateTime ScheduledAt, int Index)? latest = null;
+        while (current is not null && current <= now && index <= 100_000)
         {
-            var next = AddRepeat(current);
-
-            if (next > now || next == current)
-            {
-                return current;
-            }
-
+            if (!IsOccurrenceAllowed(current.Value, index)) break;
+            latest = (current.Value, index);
+            var next = NextRecurringAfter(current.Value);
+            if (next is null || next == current) break;
             current = next;
+            index++;
         }
+        return latest;
     }
+
+    private DateTime? FirstRecurringAt()
+    {
+        if (StartAt is null) return null;
+        var start = StartAt.Value;
+        return RepeatPattern switch
+        {
+            RepeatPattern.Weekdays => NextMatchingDay(start, day => day is not (DayOfWeek.Saturday or DayOfWeek.Sunday), true),
+            RepeatPattern.SelectedWeekdays => NextMatchingDay(start, day => EffectiveRepeatDays().Contains(day), true),
+            RepeatPattern.MonthlyNthWeekday => FirstMonthlyOccurrence(start),
+            RepeatPattern.MonthlyLastDay => FirstMonthlyLastDay(start),
+            _ => start
+        };
+    }
+
+    private DateTime? NextRecurringAfter(DateTime value) => RepeatPattern switch
+    {
+        RepeatPattern.Weekdays => NextMatchingDay(value.AddDays(1), day => day is not (DayOfWeek.Saturday or DayOfWeek.Sunday), true),
+        RepeatPattern.SelectedWeekdays => NextMatchingDay(value.AddDays(1), day => EffectiveRepeatDays().Contains(day), true),
+        RepeatPattern.MonthlyNthWeekday => NextMonthlyOccurrence(value, RepeatWeekOfMonth, RepeatDayOfWeek),
+        RepeatPattern.MonthlyLastDay => NextMonthlyLastDay(value),
+        RepeatPattern.LunarYearly => NextLunarYearly(value),
+        _ => AddRepeat(value)
+    };
 
     private DateTime AddRepeat(DateTime value) => RepeatUnit switch
     {
@@ -494,9 +655,98 @@ public sealed class EventItem
             .FirstOrDefault();
         if (adjusted is not null) return adjusted.ScheduledAt;
         var current = CurrentRecurringAt(now);
-        return current is not null && FindOccurrence(current.Value)?.IsHandled is not true
-            ? current
+        return current is not null && FindOccurrence(current.Value.ScheduledAt)?.IsHandled is not true
+            ? current.Value.ScheduledAt
             : NextRecurringAt(now);
+    }
+
+    private bool IsOccurrenceAllowed(DateTime occurrence, int index) => RecurrenceEndMode switch
+    {
+        RecurrenceEndMode.OnDate => RepeatUntil is null || occurrence.Date <= RepeatUntil.Value.Date,
+        RecurrenceEndMode.AfterCount => index <= Math.Max(1, RepeatCount),
+        _ => true
+    };
+
+    private HashSet<DayOfWeek> EffectiveRepeatDays() => RepeatDaysOfWeek.Count == 0
+        ? [StartAt?.DayOfWeek ?? DayOfWeek.Monday]
+        : RepeatDaysOfWeek.ToHashSet();
+
+    private static DateTime NextMatchingDay(DateTime value, Func<DayOfWeek, bool> matches, bool includeCurrent)
+    {
+        var candidate = includeCurrent ? value : value.AddDays(1);
+        for (var i = 0; i < 7; i++, candidate = candidate.AddDays(1))
+        {
+            if (matches(candidate.DayOfWeek)) return candidate;
+        }
+        return value;
+    }
+
+    private DateTime NextMonthlyOccurrence(DateTime value, int week, DayOfWeek day)
+    {
+        var month = new DateTime(value.Year, value.Month, 1).AddMonths(Math.Max(1, RepeatEvery));
+        return MonthlyOccurrence(month.Year, month.Month, week, day, value.TimeOfDay);
+    }
+
+    private DateTime FirstMonthlyOccurrence(DateTime start)
+    {
+        var result = MonthlyOccurrence(start.Year, start.Month, RepeatWeekOfMonth, RepeatDayOfWeek, start.TimeOfDay);
+        return result < start ? NextMonthlyOccurrence(start, RepeatWeekOfMonth, RepeatDayOfWeek) : result;
+    }
+
+    private DateTime NextMonthlyLastDay(DateTime value)
+    {
+        var month = new DateTime(value.Year, value.Month, 1).AddMonths(Math.Max(1, RepeatEvery));
+        return new DateTime(month.Year, month.Month, DateTime.DaysInMonth(month.Year, month.Month)).Add(value.TimeOfDay);
+    }
+
+    private DateTime FirstMonthlyLastDay(DateTime start)
+    {
+        var result = new DateTime(start.Year, start.Month, DateTime.DaysInMonth(start.Year, start.Month)).Add(start.TimeOfDay);
+        return result < start ? NextMonthlyLastDay(start) : result;
+    }
+
+    private static DateTime MonthlyOccurrence(int year, int month, int week, DayOfWeek day, TimeSpan time)
+    {
+        if (week < 0)
+        {
+            var last = new DateTime(year, month, DateTime.DaysInMonth(year, month));
+            return last.AddDays(-((7 + (int)last.DayOfWeek - (int)day) % 7)).Add(time);
+        }
+        var first = new DateTime(year, month, 1);
+        var result = first.AddDays((7 + (int)day - (int)first.DayOfWeek) % 7 + 7 * (Math.Clamp(week, 1, 5) - 1));
+        if (result.Month != month) result = result.AddDays(-7);
+        return result.Add(time);
+    }
+
+    private DateTime? NextLunarYearly(DateTime value)
+    {
+        if (StartAt is null) return null;
+        try
+        {
+            var calendar = new ChineseLunisolarCalendar();
+            var sourceYear = calendar.GetYear(StartAt.Value);
+            var sourceMonth = calendar.GetMonth(StartAt.Value);
+            var sourceDay = calendar.GetDayOfMonth(StartAt.Value);
+            var leapMonth = calendar.GetLeapMonth(sourceYear);
+            var logicalMonth = leapMonth > 0 && sourceMonth >= leapMonth ? sourceMonth - 1 : sourceMonth;
+            var wasLeap = leapMonth > 0 && sourceMonth == leapMonth;
+            for (var year = value.Year + 1; year <= value.Year + 3; year++)
+            {
+                var lunarYear = calendar.GetYear(new DateTime(year, 7, 1));
+                var targetLeap = calendar.GetLeapMonth(lunarYear);
+                var targetMonth = logicalMonth;
+                if (wasLeap && targetLeap == logicalMonth + 1) targetMonth = targetLeap;
+                else if (targetLeap > 0 && logicalMonth >= targetLeap) targetMonth++;
+                var day = Math.Min(sourceDay, calendar.GetDaysInMonth(lunarYear, targetMonth));
+                var result = calendar.ToDateTime(lunarYear, targetMonth, day, 0, 0, 0, 0).Add(StartAt.Value.TimeOfDay);
+                if (result > value) return result;
+            }
+        }
+        catch
+        {
+            // 超出农历支持范围时停止该系列。
+        }
+        return null;
     }
 
     private EventOccurrence? FindOccurrence(DateTime scheduledAt) => Occurrences
@@ -504,7 +754,9 @@ public sealed class EventItem
 
     private void RecordOccurrence(EventStatus status, DateTime handledAt)
     {
-        var scheduledAt = ActiveOccurrenceAt(handledAt);
+        var scheduledAt = Type is EventType.Birthday or EventType.Anniversary
+            ? NextDueAt(handledAt.Date)
+            : ActiveOccurrenceAt(handledAt);
         if (scheduledAt is null) return;
         var occurrence = FindOccurrence(scheduledAt.Value) ?? new EventOccurrence { ScheduledAt = scheduledAt.Value };
         if (!Occurrences.Contains(occurrence)) Occurrences.Add(occurrence);
@@ -522,8 +774,20 @@ public sealed class EventItem
     public void NormalizeAfterLoad()
     {
         FolderIds ??= [];
+        PersonIds ??= [];
         Occurrences ??= [];
+        RepeatDaysOfWeek ??= [];
         RepeatEvery = Math.Max(1, RepeatEvery);
+        RepeatWeekOfMonth = RepeatWeekOfMonth is < -1 or 0 or > 5 ? 1 : RepeatWeekOfMonth;
+        RepeatCount = Math.Max(0, RepeatCount);
+        ProjectOrder = Math.Max(0, ProjectOrder);
+        if (ProjectId == Id) ProjectId = null;
+        if (IsProject)
+        {
+            IsGroup = false;
+            ProjectId = null;
+            RepeatUnit = RepeatUnit.None;
+        }
         if (IsRecurringSeries)
         {
             Type = Type is EventType.Habit ? EventType.Habit : EventType.Recurring;
@@ -534,7 +798,7 @@ public sealed class EventItem
     private DateTime? NextBirthdayAt(DateTime now)
     {
         var current = CurrentBirthdayAt(now);
-        if (current is not null && current >= now)
+        if (current is not null && current.Value.Date >= now.Date && !IsOccurrenceHandled(current.Value))
         {
             return current;
         }
@@ -606,4 +870,7 @@ public sealed class EventItem
     {
         return StartAt?.TimeOfDay ?? new TimeSpan(9, 0, 0);
     }
+
+    private bool IsOccurrenceHandled(DateTime scheduledAt) => Occurrences.Any(occurrence =>
+        occurrence.IsHandled && occurrence.ScheduledAt.Date == scheduledAt.Date);
 }

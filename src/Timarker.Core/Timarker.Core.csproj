@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Timarker.Core</AssemblyName>
+    <RootNamespace>Timarker</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Timarker\Models\*.cs" Link="Models\%(Filename)%(Extension)" />
+    <Compile Include="..\Timarker\LunarDate.cs" Link="LunarDate.cs" />
+    <Compile Include="..\Timarker\Services\EventStore.cs" Link="Services\EventStore.cs" />
+  </ItemGroup>
+</Project>

@@ -9,7 +9,12 @@ public sealed class TagEditor : UserControl
         WrapContents = true
     };
 
-    private readonly TextBox _input = new() { Dock = DockStyle.Fill, PlaceholderText = "输入词条后按 Enter" };
+    private readonly TextBox _input = new()
+    {
+        Dock = DockStyle.Fill,
+        BorderStyle = BorderStyle.None,
+        PlaceholderText = "输入词条后按 Enter"
+    };
     private readonly List<string> _tags = [];
 
     public TagEditor()
@@ -28,7 +33,23 @@ public sealed class TagEditor : UserControl
         };
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        layout.Controls.Add(_input, 0, 0);
+        var inputShell = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.White,
+            Margin = Padding.Empty,
+            Padding = new Padding(11, 8, 11, 6)
+        };
+        inputShell.Paint += (_, e) =>
+        {
+            ModernUi.DrawBorder(e.Graphics, inputShell.ClientRectangle, 9,
+                _input.Focused ? Color.FromArgb(59, 130, 246) : Color.FromArgb(148, 163, 184), 1.25F);
+        };
+        _input.Enter += (_, _) => inputShell.Invalidate();
+        _input.Leave += (_, _) => inputShell.Invalidate();
+        inputShell.Controls.Add(_input);
+        ModernUi.Round(inputShell, 9);
+        layout.Controls.Add(inputShell, 0, 0);
         layout.Controls.Add(_chips, 0, 1);
         Controls.Add(layout);
 
@@ -92,7 +113,9 @@ public sealed class TagEditor : UserControl
                 ForeColor = Color.FromArgb(37, 99, 235),
                 Margin = new Padding(0, 0, 6, 6)
             };
+            chip.FlatAppearance.BorderSize = 0;
             chip.FlatAppearance.BorderColor = Color.FromArgb(191, 219, 254);
+            ModernUi.Outline(chip, 14, () => chip.FlatAppearance.BorderColor);
             chip.Click += (_, _) =>
             {
                 _tags.Remove(tag);

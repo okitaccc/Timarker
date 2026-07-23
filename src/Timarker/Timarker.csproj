@@ -5,8 +5,15 @@
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <Product>事刻 Timarker</Product>
     <Company>Timarker</Company>
   </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Timarker.Core\Timarker.Core.csproj" />
+    <Compile Remove="Models\*.cs" />
+    <Compile Remove="LunarDate.cs" />
+    <Compile Remove="Services\EventStore.cs" />
+  </ItemGroup>
 </Project>

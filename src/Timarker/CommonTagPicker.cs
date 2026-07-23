@@ -40,9 +40,11 @@ public sealed class CommonTagPicker : UserControl
                 TextAlign = ContentAlignment.MiddleCenter,
                 UseCompatibleTextRendering = false
             };
+            chip.FlatAppearance.BorderSize = 0;
             chip.FlatAppearance.BorderColor = Color.FromArgb(203, 213, 225);
             chip.CheckedChanged += (_, _) => StyleChip(chip);
             StyleChip(chip);
+            ModernUi.Outline(chip, 16, () => chip.FlatAppearance.BorderColor);
             _panel.Controls.Add(chip);
         }
         L.Apply(this);

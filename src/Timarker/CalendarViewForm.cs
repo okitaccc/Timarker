@@ -13,9 +13,10 @@ public sealed class CalendarViewForm : Form
     private static readonly Color Accent = Color.FromArgb(37, 99, 235);
 
     private readonly IReadOnlyList<EventItem> _events;
-    private readonly Action<EventItem> _editItem;
+    private readonly Action<EventItem, DateTime> _editItem;
     private readonly Action<DateTime> _createItem;
     private readonly Action<EventItem> _completeItem;
+    private readonly Action<EventItem> _togglePauseItem;
     private readonly Action<EventItem> _deleteItem;
     private readonly Action<EventItem, EventItem> _addToFolder;
     private readonly Action<EventItem> _createFolder;
@@ -37,14 +38,15 @@ public sealed class CalendarViewForm : Form
     private DateTime _visibleMonth = new(DateTime.Today.Year, DateTime.Today.Month, 1);
     private DateTime _selectedDay = DateTime.Today;
 
-    public CalendarViewForm(IReadOnlyList<EventItem> events, Action<EventItem> editItem, Action<DateTime> createItem,
-        Action<EventItem> completeItem, Action<EventItem> deleteItem, Action<EventItem, EventItem> addToFolder,
+    public CalendarViewForm(IReadOnlyList<EventItem> events, Action<EventItem, DateTime> editItem, Action<DateTime> createItem,
+        Action<EventItem> completeItem, Action<EventItem> togglePauseItem, Action<EventItem> deleteItem, Action<EventItem, EventItem> addToFolder,
         Action<EventItem> createFolder, Action<string> createFolderFromTag)
     {
         _events = events;
         _editItem = editItem;
         _createItem = createItem;
         _completeItem = completeItem;
+        _togglePauseItem = togglePauseItem;
         _deleteItem = deleteItem;
         _addToFolder = addToFolder;
         _createFolder = createFolder;
@@ -233,7 +235,7 @@ public sealed class CalendarViewForm : Form
         {
             if (_items.SelectedItem is EventItem item)
             {
-                _editItem(item);
+                _editItem(item, _selectedDay);
                 RefreshCalendar();
                 RefreshDay();
             }
@@ -253,7 +255,7 @@ public sealed class CalendarViewForm : Form
         {
             if (e.Button == MouseButtons.Right) _items.SelectedIndex = _items.IndexFromPoint(e.Location);
         };
-        var menu = new ContextMenuStrip();
+        var menu = new ModernContextMenuStrip();
         menu.Opening += (_, e) =>
         {
             menu.Items.Clear();
@@ -263,8 +265,16 @@ public sealed class CalendarViewForm : Form
                 return;
             }
 
-            menu.Items.Add("编辑", null, (_, _) => RunAndRefresh(() => _editItem(item)));
-            if (item.Status is not EventStatus.Done)
+            menu.Items.Add("编辑", null, (_, _) => RunAndRefresh(() => _editItem(item, _selectedDay)));
+            if (item.IsRecurringSeries)
+            {
+                if (!item.IsRecurrencePaused)
+                {
+                    menu.Items.Add("完成本次", null, (_, _) => RunAndRefresh(() => _completeItem(item)));
+                }
+                menu.Items.Add(item.IsRecurrencePaused ? "恢复重复" : "暂停重复", null, (_, _) => RunAndRefresh(() => _togglePauseItem(item)));
+            }
+            else if (item.Status is not EventStatus.Done)
             {
                 menu.Items.Add("完成", null, (_, _) => RunAndRefresh(() => _completeItem(item)));
             }
@@ -375,7 +385,7 @@ public sealed class CalendarViewForm : Form
     {
         var now = DateTime.Now;
         return _events
-            .Where(e => e.NextDueAt(now)?.Date == day.Date)
+            .Where(e => e.IsRecurringSeries ? e.OccursOn(day) : e.NextDueAt(now)?.Date == day.Date)
             .OrderBy(e => e.NextDueAt(now))
             .ToList();
     }

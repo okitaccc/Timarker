@@ -14,6 +14,8 @@ Timarker 是一款面向 Windows 的本地优先时间与事项提醒应用。�
 - 在“今日与未来”中按状态筛选和搜索
 - 使用月历查看事项，并快速跳转年月
 - 使用词条组织事项，按词条创建收藏夹
+- 使用项目拆分大事项，按顺序管理步骤、进度与下一步行动
+- 为每个项目步骤独立设置日期与提醒，并批量顺延未完成步骤
 - 在日历、列表和收藏夹中编辑或删除事项
 - 使用悬浮倒计时关注临近事项
 - 使用内置番茄钟进行专注计时
@@ -70,13 +72,13 @@ dotnet run
 除 .NET 8 SDK 外，还需要安装 [Inno Setup](https://jrsoftware.org/isdl.php)。然后在项目根目录运行：
 
 ```powershell
-.\build-installer.ps1 -Version 0.1.0
+.\build-installer.ps1 -Version 0.1.1
 ```
 
 生成结果：
 
 ```text
-artifacts\installer\Timarker-Setup-0.1.0.exe
+artifacts\installer\Timarker-Setup-0.1.1.exe
 ```
 
 ## 项目结构
@@ -106,8 +108,7 @@ Timarker/
 
 ## 当前计划
 
-- 完善周期事项与项目/组合事件
+- 增加项目模板与更复杂的步骤依赖
 - 增加应用内更新检查
 - 完善数据版本迁移
 - 持续补齐英文界面与可访问性
-

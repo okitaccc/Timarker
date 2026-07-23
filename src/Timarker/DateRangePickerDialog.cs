@@ -231,7 +231,7 @@ public sealed class DateRangePickerDialog : Form
 
     private static ComboBox TimeChoice(int count)
     {
-        var box = new ComboBox
+        var box = new ModernComboBox
         {
             DropDownStyle = ComboBoxStyle.DropDownList,
             FlatStyle = FlatStyle.Flat,

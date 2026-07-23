@@ -35,6 +35,7 @@ public static class EventCardRenderer
         {
             EventType.Anniversary => L.IsEnglish ? $"{item.AnniversarySummary(DateTime.Now)}  ·  Next {due}" : $"{item.AnniversarySummary(DateTime.Now)}  ·  下次 {due}",
             EventType.Birthday when item.BirthdaySummary(DateTime.Now).Length > 0 => L.IsEnglish ? $"{item.BirthdaySummary(DateTime.Now)}  ·  Next {due}" : $"{item.BirthdaySummary(DateTime.Now)}  ·  下次 {due}",
+            EventType.Recurring or EventType.Habit when item.IsRecurrencePaused => L.IsEnglish ? "Recurrence paused" : "周期已暂停",
             EventType.Recurring or EventType.Habit => L.IsEnglish ? $"Completed {item.Occurrences.Count(x => x.Status is EventStatus.Done)} times  ·  Next {due}" : $"已完成 {item.Occurrences.Count(x => x.Status is EventStatus.Done)} 次  ·  下次 {due}",
             _ => $"{due}  ·  {L.T(item.TypeText)}  ·  {L.T(item.StatusText)}"
         };
@@ -44,6 +45,7 @@ public static class EventCardRenderer
             {
                 EventType.Anniversary => $"{item.AnniversarySummary(DateTime.Now)}  ·  Next {due}",
                 EventType.Birthday when item.BirthdaySummary(DateTime.Now).Length > 0 => $"{item.BirthdaySummary(DateTime.Now)}  ·  Next {due}",
+                EventType.Recurring or EventType.Habit when item.IsRecurrencePaused => "Recurrence paused",
                 EventType.Recurring or EventType.Habit => $"Completed {item.Occurrences.Count(x => x.Status is EventStatus.Done)} times  ·  Next {due}",
                 _ => $"{due}  ·  {L.T(item.TypeText)}  ·  {L.T(item.StatusText)}"
             };

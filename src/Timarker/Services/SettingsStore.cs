@@ -51,11 +51,7 @@ public sealed class SettingsStore
 
     private static void SetStartWithWindows(bool enabled)
     {
-        using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: true);
-        if (key is null)
-        {
-            return;
-        }
+        using var key = Registry.CurrentUser.CreateSubKey(RunKeyPath, writable: true);
 
         if (enabled)
         {

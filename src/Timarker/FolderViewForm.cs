@@ -21,7 +21,7 @@ public sealed class FolderViewForm : UserControl
     };
     private readonly ListBox _items = EventList();
     private readonly ListBox _available = EventList(SelectionMode.MultiExtended);
-    private readonly ComboBox _tagFilter = new() { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ComboBox _tagFilter = new ModernComboBox { Dock = DockStyle.Fill };
     private readonly Label _title = new() { Dock = DockStyle.Fill, Font = new Font("Microsoft YaHei UI", 12F, FontStyle.Bold) };
 
     public FolderViewForm(IReadOnlyList<EventItem> events, Action<EventItem> edit, Action<EventItem> delete, Action createFolder, Action save)
@@ -102,7 +102,7 @@ public sealed class FolderViewForm : UserControl
                 RefreshItems();
             }
         };
-        var menu = new ContextMenuStrip();
+        var menu = new ModernContextMenuStrip();
         menu.Items.Add("编辑", null, (_, _) => { if (_items.SelectedItem is EventItem item) _edit(item); });
         menu.Items.Add("从收藏夹移除", null, (_, _) =>
         {
@@ -117,7 +117,7 @@ public sealed class FolderViewForm : UserControl
             }
         });
         _items.ContextMenuStrip = menu;
-        var folderMenu = new ContextMenuStrip();
+        var folderMenu = new ModernContextMenuStrip();
         folderMenu.Items.Add("重命名", null, (_, _) => RenameSelectedFolder());
         folderMenu.Items.Add(new ToolStripSeparator());
         var deleteFolder = folderMenu.Items.Add("删除收藏夹", null, (_, _) => DeleteSelectedFolder());
@@ -171,7 +171,7 @@ public sealed class FolderViewForm : UserControl
         e.Graphics.FillRectangle(background, card);
         e.Graphics.DrawRectangle(border, card);
 
-        var count = _events.Count(x => !x.IsGroup && x.IsInFolder(folder.Id));
+        var count = _events.Count(x => !x.IsGroup && !x.IsProject && x.IsInFolder(folder.Id));
         using var titleFont = new Font(Font.FontFamily, 10.5F, FontStyle.Bold);
         using var detailFont = new Font(Font.FontFamily, 8F);
         TextRenderer.DrawText(e.Graphics, folder.Title, titleFont,
@@ -210,7 +210,7 @@ public sealed class FolderViewForm : UserControl
             _title.Text = "选择一个收藏夹";
             return;
         }
-        var children = _events.Where(x => !x.IsGroup && x.IsInFolder(folder.Id)).OrderBy(x => x.Title).ToList();
+        var children = _events.Where(x => !x.IsGroup && !x.IsProject && x.IsInFolder(folder.Id)).OrderBy(x => x.Title).ToList();
         _title.Text = $"{folder.Title} · {children.Count} 个事件";
         foreach (var item in children)
         {
@@ -223,7 +223,7 @@ public sealed class FolderViewForm : UserControl
     {
         _tagFilter.Items.Clear();
         _tagFilter.Items.Add("全部词条");
-        foreach (var tag in _events.Where(x => !x.IsGroup).SelectMany(x => SplitTags(x.Tags))
+        foreach (var tag in _events.Where(x => !x.IsGroup && !x.IsProject).SelectMany(x => SplitTags(x.Tags))
                      .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x))
         {
             _tagFilter.Items.Add(tag);
@@ -240,7 +240,7 @@ public sealed class FolderViewForm : UserControl
         }
 
         var tag = _tagFilter.SelectedIndex > 0 ? _tagFilter.SelectedItem?.ToString() : null;
-        foreach (var item in _events.Where(x => !x.IsGroup && !x.IsInFolder(folder.Id))
+        foreach (var item in _events.Where(x => !x.IsGroup && !x.IsProject && !x.IsInFolder(folder.Id))
                      .Where(x => tag is null || SplitTags(x.Tags).Contains(tag, StringComparer.OrdinalIgnoreCase))
                      .OrderBy(x => x.Title))
         {
@@ -271,7 +271,7 @@ public sealed class FolderViewForm : UserControl
         }
 
         using var dialog = new Form { Text = "重命名收藏夹", Width = 380, Height = 160, StartPosition = FormStartPosition.CenterParent, Font = Font };
-        var input = new TextBox { Text = folder.Title, Dock = DockStyle.Top };
+        var input = new ModernTextBox { Text = folder.Title, Dock = DockStyle.Top };
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 44, FlowDirection = FlowDirection.RightToLeft, WrapContents = false };
         var ok = new Button { Text = "保存", DialogResult = DialogResult.OK, Width = 84, Height = 34 };
         var cancel = new Button { Text = "取消", DialogResult = DialogResult.Cancel, Width = 84, Height = 34 };
