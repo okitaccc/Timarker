@@ -13,14 +13,17 @@ public sealed class FloatingCountdownForm : Form
     private readonly Label _title = new();
     private readonly Label _time = new();
     private readonly Label _meta = new();
-    private readonly ListBox _list = new() { Dock = DockStyle.Fill, BorderStyle = BorderStyle.None };
+    private readonly ListBox _list = new BufferedListBox { Dock = DockStyle.Fill, BorderStyle = BorderStyle.None };
+    private readonly Button _done;
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 1000 };
+    private string _listSignature = string.Empty;
     private Point _dragStart;
 
     public FloatingCountdownForm(Func<IReadOnlyList<EventItem>> getEvents, Action<EventItem> complete)
     {
         _getEvents = getEvents;
         _complete = complete;
+        _done = SmallButton("完成");
 
         Text = "Timarker 悬浮倒计时";
         Width = 360;
@@ -32,6 +35,7 @@ public sealed class FloatingCountdownForm : Form
         StartPosition = FormStartPosition.Manual;
         Location = new Point(Screen.PrimaryScreen?.WorkingArea.Right - Width - 24 ?? 100, 80);
         Font = new Font("Microsoft YaHei UI", 9F);
+        DoubleBuffered = true;
 
         BuildUi();
         MouseDown += StartDrag;
@@ -89,8 +93,7 @@ public sealed class FloatingCountdownForm : Form
         close.Click += (_, _) => Close();
         buttons.Controls.Add(close);
 
-        var done = SmallButton("完成");
-        done.Click += (_, _) =>
+        _done.Click += (_, _) =>
         {
             var item = _getEvents().FirstOrDefault();
             if (item is not null)
@@ -99,7 +102,7 @@ public sealed class FloatingCountdownForm : Form
                 RefreshContent();
             }
         };
-        buttons.Controls.Add(done);
+        buttons.Controls.Add(_done);
 
         root.Controls.Add(buttons);
         Controls.Add(root);
@@ -108,7 +111,7 @@ public sealed class FloatingCountdownForm : Form
     private void RefreshContent()
     {
         var items = _getEvents();
-        _list.Items.Clear();
+        RefreshEventList(items);
         if (items.Count == 0)
         {
             _title.Text = "暂无待处理事项";
@@ -124,18 +127,35 @@ public sealed class FloatingCountdownForm : Form
         left = left.Duration();
 
         _title.Text = first.Title;
-        _time.Text = $"{(overdue ? "已过 " : "")}{(int)left.TotalHours:00}:{left.Minutes:00}:{left.Seconds:00}";
+        _time.Text = left.TotalHours >= 48
+            ? $"{(overdue ? "已过" : "还剩")} {Math.Max(1, (int)Math.Ceiling(left.TotalDays))} 天"
+            : $"{(overdue ? "已过 " : "")}{(int)left.TotalHours:00}:{left.Minutes:00}:{left.Seconds:00}";
         _meta.Text = $"{first.TypeText} · {due:MM-dd HH:mm} · {first.StatusText}";
+        _done.Visible = first.Type is not EventType.Anniversary;
 
+    }
+
+    private void RefreshEventList(IReadOnlyList<EventItem> items)
+    {
+        var remaining = items.Skip(1)
+            .Select(item => $"{item.Id:N}|{item.NextDueAt(DateTime.Now):O}|{item.Title}")
+            .ToArray();
+        var signature = string.Join('\n', remaining);
+        if (signature == _listSignature) return;
+
+        _listSignature = signature;
+        _list.BeginUpdate();
+        _list.Items.Clear();
         foreach (var item in items.Skip(1))
         {
             _list.Items.Add($"{item.NextDueAt(DateTime.Now):MM-dd HH:mm}  {item.Title}");
         }
+        _list.EndUpdate();
     }
 
     private static Button SmallButton(string text)
     {
-        var button = new Button
+        var button = new ModernButton
         {
             Text = text,
             Height = 28,
@@ -164,5 +184,10 @@ public sealed class FloatingCountdownForm : Form
             Left += e.X - _dragStart.X;
             Top += e.Y - _dragStart.Y;
         }
+    }
+
+    private sealed class BufferedListBox : ListBox
+    {
+        public BufferedListBox() => SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
     }
 }

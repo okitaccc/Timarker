@@ -16,6 +16,8 @@ public sealed class EventStore
     public List<PersonProfile> People { get; private set; } = [];
     public List<ActivityRecord> Records { get; private set; } = [];
     public List<NoteItem> Notes { get; private set; } = [];
+    public List<Folder> Folders { get; private set; } = [];
+    public List<Project> Projects { get; private set; } = [];
 
     public EventStore(string directory)
     {
@@ -45,10 +47,16 @@ public sealed class EventStore
                 foreach (var person in document.People) person.NormalizeAfterLoad();
                 foreach (var record in document.Records) record.NormalizeAfterLoad();
                 foreach (var note in document.Notes) note.NormalizeAfterLoad();
+                foreach (var folder in document.Folders) folder.NormalizeAfterLoad();
+                foreach (var project in document.Projects) project.NormalizeAfterLoad();
                 if (document.SchemaVersion < 4) MigrateOccasionPeople(document);
+                if (document.SchemaVersion < 6) MigrateFoldersAndProjects(document);
+                RemoveBrokenReferences(document);
                 People = document.People;
                 Records = document.Records;
                 Notes = document.Notes;
+                Folders = document.Folders;
+                Projects = document.Projects;
                 if (!string.Equals(candidate, _filePath, StringComparison.OrdinalIgnoreCase))
                 {
                     RecoveryMessage = $"主数据文件无法读取，已从备份 {Path.GetFileName(candidate)} 恢复。";
@@ -72,7 +80,8 @@ public sealed class EventStore
         return [];
     }
 
-    public void Save(IEnumerable<EventItem> events, IEnumerable<PersonProfile>? people = null, IEnumerable<ActivityRecord>? records = null, IEnumerable<NoteItem>? notes = null)
+    public void Save(IEnumerable<EventItem> events, IEnumerable<PersonProfile>? people = null, IEnumerable<ActivityRecord>? records = null,
+        IEnumerable<NoteItem>? notes = null, IEnumerable<Folder>? folders = null, IEnumerable<Project>? projects = null)
     {
         lock (_gate)
         {
@@ -81,7 +90,9 @@ public sealed class EventStore
                 Events = events.ToList(),
                 People = (people ?? People).ToList(),
                 Records = (records ?? Records).ToList(),
-                Notes = (notes ?? Notes).ToList()
+                Notes = (notes ?? Notes).ToList(),
+                Folders = (folders ?? Folders).ToList(),
+                Projects = (projects ?? Projects).ToList()
             };
             var tempPath = _filePath + ".tmp";
             try
@@ -127,6 +138,54 @@ public sealed class EventStore
         }
     }
 
+    private static void MigrateFoldersAndProjects(StoreDocument document)
+    {
+        foreach (var legacy in document.Events.Where(x => x.IsGroup).ToList())
+        {
+            var folder = new Folder { Id = legacy.Id, Name = legacy.Title, CreatedAt = legacy.CreatedAt, UpdatedAt = legacy.UpdatedAt };
+            foreach (var item in document.Events.Where(x => !x.IsGroup && !x.IsProject && x.IsInFolder(legacy.Id))) folder.Add(item.Id);
+            if (document.Folders.All(x => x.Id != folder.Id)) document.Folders.Add(folder);
+            document.Events.Remove(legacy);
+        }
+
+        foreach (var legacy in document.Events.Where(x => x.IsProject).ToList())
+        {
+            var project = new Project
+            {
+                Id = legacy.Id,
+                Name = legacy.Title,
+                Notes = legacy.Notes,
+                DeadlineAt = legacy.DeadlineAt,
+                IsCompleted = legacy.Status is EventStatus.Done,
+                CreatedAt = legacy.CreatedAt,
+                UpdatedAt = legacy.UpdatedAt
+            };
+            foreach (var item in document.Events.Where(x => x.ProjectId == legacy.Id).OrderBy(x => x.ProjectOrder))
+                project.Steps.Add(new ProjectStep { EventId = item.Id, Order = item.ProjectOrder });
+            project.NormalizeAfterLoad();
+            if (document.Projects.All(x => x.Id != project.Id)) document.Projects.Add(project);
+            document.Events.Remove(legacy);
+        }
+
+        foreach (var item in document.Events)
+        {
+            item.IsGroup = false;
+            item.IsProject = false;
+            item.ParentId = null;
+            item.FolderIds.Clear();
+            item.ProjectId = null;
+            item.ProjectOrder = 0;
+        }
+        document.SchemaVersion = 6;
+    }
+
+    private static void RemoveBrokenReferences(StoreDocument document)
+    {
+        var eventIds = document.Events.Select(x => x.Id).ToHashSet();
+        foreach (var folder in document.Folders) folder.EventIds.RemoveAll(id => !eventIds.Contains(id));
+        foreach (var project in document.Projects) project.Steps.RemoveAll(step => !eventIds.Contains(step.EventId));
+    }
+
     private void CreateRollingBackup()
     {
         Directory.CreateDirectory(_backupDirectory);
@@ -142,11 +201,13 @@ public sealed class EventStore
 
     private sealed class StoreDocument
     {
-        public int SchemaVersion { get; set; } = 5;
+        public int SchemaVersion { get; set; } = 6;
         public DateTime SavedAt { get; set; } = DateTime.Now;
         public List<EventItem> Events { get; set; } = [];
         public List<PersonProfile> People { get; set; } = [];
         public List<ActivityRecord> Records { get; set; } = [];
         public List<NoteItem> Notes { get; set; } = [];
+        public List<Folder> Folders { get; set; } = [];
+        public List<Project> Projects { get; set; } = [];
     }
 }

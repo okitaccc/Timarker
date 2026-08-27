@@ -11,7 +11,8 @@ public enum EventType
     Habit,
     Birthday,
     Anniversary,
-    Maybe
+    Maybe,
+    AnytimeToday
 }
 
 public enum EventStatus
@@ -165,6 +166,7 @@ public sealed class EventItem
     public int ReminderLeadMinutes { get; set; }
     public int ReminderRepeatMinutes { get; set; } = 10;
     public int ReminderRepeatCount { get; set; }
+    public bool ReminderEnabled { get; set; } = true;
     public int ReminderSentCount { get; set; }
     public DateTime? LastReminderAt { get; set; }
     public DateTime? SnoozedUntil { get; set; }
@@ -178,8 +180,7 @@ public sealed class EventItem
 
     public DateTime? NextDueAt(DateTime now)
     {
-        if (IsProject
-            || Status is EventStatus.Cancelled
+        if (Status is EventStatus.Cancelled
             || IsRecurringSeries && IsRecurrencePaused
             || (!IsRecurringSeries && Status is (EventStatus.Done or EventStatus.Skipped)))
         {
@@ -194,6 +195,12 @@ public sealed class EventItem
         if (Type is EventType.TimeWindow)
         {
             return StartAt;
+        }
+
+        if (Type is EventType.AnytimeToday)
+        {
+            var occurrence = IsRecurringSeries ? NextRecurringAt(now) : StartAt;
+            return occurrence?.Date.AddDays(1).AddTicks(-1);
         }
 
         if (Type is EventType.Birthday)
@@ -216,6 +223,7 @@ public sealed class EventItem
 
     public bool IsDue(DateTime now)
     {
+        if (!ReminderEnabled) return false;
         if (SnoozedUntil is not null && SnoozedUntil > now)
         {
             return false;
@@ -383,6 +391,12 @@ public sealed class EventItem
 
     private DateTime? ReminderTargetAt(DateTime now)
     {
+        if (!ReminderEnabled) return null;
+
+        if (Type is EventType.AnytimeToday)
+        {
+            return IsRecurringSeries ? NextRecurringAt(now) : StartAt;
+        }
         if (Type is EventType.Birthday)
         {
             return CurrentBirthdayAt(now);
@@ -419,7 +433,7 @@ public sealed class EventItem
 
     public string TypeText => Type switch
     {
-        EventType.StartAt => "到点开始",
+        EventType.StartAt => "一次性事项",
         EventType.Deadline => "截止事项",
         EventType.TimeWindow => "时间段",
         EventType.Recurring => "周期事项",
@@ -427,6 +441,7 @@ public sealed class EventItem
         EventType.Birthday => "生日提醒",
         EventType.Anniversary => "纪念日",
         EventType.Maybe => "可能要做",
+        EventType.AnytimeToday => "当天内完成",
         _ => Type.ToString()
     };
 
@@ -790,7 +805,7 @@ public sealed class EventItem
         }
         if (IsRecurringSeries)
         {
-            Type = Type is EventType.Habit ? EventType.Habit : EventType.Recurring;
+            Type = Type is EventType.Habit or EventType.AnytimeToday ? Type : EventType.Recurring;
             if (Status is EventStatus.Done or EventStatus.Skipped or EventStatus.Postponed) Status = EventStatus.Pending;
         }
     }

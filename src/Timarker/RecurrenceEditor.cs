@@ -4,9 +4,9 @@ namespace Timarker;
 
 internal sealed class RecurrenceEditor : UserControl
 {
-    private static readonly Color Border = Color.FromArgb(226, 232, 240);
-    private static readonly Color Accent = Color.FromArgb(37, 99, 235);
-    private static readonly Color Muted = Color.FromArgb(100, 116, 139);
+    private static Color Border => AppTheme.Border;
+    private static Color Accent => UiTokens.Primary;
+    private static Color Muted => AppTheme.Muted;
 
     private readonly ComboBox _pattern = Combo();
     private readonly ModernNumericUpDown _every = new() { Minimum = 1, Maximum = 365, Value = 1, Width = 82 };
@@ -18,7 +18,8 @@ internal sealed class RecurrenceEditor : UserControl
     private readonly FlowLayoutPanel _monthlyPanel = Row();
     private readonly ComboBox _endMode = Combo(132);
     private readonly ComboBox _missed = Combo(220);
-    private readonly DateTimePicker _until = new() { Format = DateTimePickerFormat.Custom, CustomFormat = "yyyy-MM-dd", Width = 126 };
+    private readonly Button _until = new ModernButton { Width = 150, Height = 32, BackColor = AppTheme.Surface };
+    private DateTime _untilDate = DateTime.Today.AddMonths(1);
     private readonly ModernNumericUpDown _count = new() { Minimum = 1, Maximum = 9999, Value = 10, Width = 88 };
     private readonly FlowLayoutPanel _endPanel = Row();
     private readonly Dictionary<DayOfWeek, CheckBox> _dayButtons = [];
@@ -27,7 +28,7 @@ internal sealed class RecurrenceEditor : UserControl
     {
         Dock = DockStyle.Fill;
         AutoSize = true;
-        BackColor = Color.White;
+        BackColor = AppTheme.Surface;
         Margin = Padding.Empty;
 
         AddOption(_pattern, "按间隔重复", RepeatPattern.Interval);
@@ -70,14 +71,14 @@ internal sealed class RecurrenceEditor : UserControl
                 Height = 30,
                 FlatStyle = FlatStyle.Flat,
                 TextAlign = ContentAlignment.MiddleCenter,
-                BackColor = Color.White,
+                BackColor = AppTheme.Surface,
                 ForeColor = Muted,
                 Margin = new Padding(0, 0, 5, 0)
             };
             button.FlatAppearance.BorderColor = Border;
             button.CheckedChanged += (_, _) =>
             {
-                button.BackColor = button.Checked ? Color.FromArgb(239, 246, 255) : Color.White;
+                button.BackColor = button.Checked ? AppTheme.Selected : AppTheme.Surface;
                 button.ForeColor = button.Checked ? Accent : Muted;
                 button.FlatAppearance.BorderColor = button.Checked ? Color.FromArgb(147, 197, 253) : Border;
             };
@@ -104,6 +105,7 @@ internal sealed class RecurrenceEditor : UserControl
 
         _pattern.SelectedIndexChanged += (_, _) => RefreshVisibility();
         _endMode.SelectedIndexChanged += (_, _) => RefreshVisibility();
+        _until.Click += (_, _) => ChooseUntilDate();
         Reset();
     }
 
@@ -117,10 +119,17 @@ internal sealed class RecurrenceEditor : UserControl
         SelectValue(_day, DayOfWeek.Monday);
         SelectValue(_endMode, RecurrenceEndMode.Never);
         SelectValue(_missed, MissedOccurrencePolicy.RemindLatest);
-        _until.Value = DateTime.Today.AddMonths(1);
+        _untilDate = DateTime.Today.AddMonths(1);
+        RefreshUntilText();
         _count.Value = 10;
         RefreshVisibility();
     }
+
+    public string StateFingerprint() => string.Join('|',
+        _pattern.SelectedIndex, _every.Value, _unit.SelectedIndex,
+        string.Join(',', _dayButtons.Where(x => x.Value.Checked).Select(x => x.Key)),
+        _week.SelectedIndex, _day.SelectedIndex, _endMode.SelectedIndex,
+        _untilDate.Ticks, _count.Value, _missed.SelectedIndex);
 
     public void SetSimple(RepeatUnit unit, int every)
     {
@@ -143,9 +152,8 @@ internal sealed class RecurrenceEditor : UserControl
         SelectValue(_day, item.RepeatDayOfWeek);
         SelectValue(_endMode, item.RecurrenceEndMode);
         SelectValue(_missed, item.MissedOccurrencePolicy);
-        _until.Value = item.RepeatUntil is { } until && until >= _until.MinDate && until <= _until.MaxDate
-            ? until
-            : DateTime.Today.AddMonths(1);
+        _untilDate = item.RepeatUntil ?? DateTime.Today.AddMonths(1);
+        RefreshUntilText();
         _count.Value = Math.Clamp(item.RepeatCount == 0 ? 10 : item.RepeatCount, (int)_count.Minimum, (int)_count.Maximum);
         RefreshVisibility();
     }
@@ -161,7 +169,7 @@ internal sealed class RecurrenceEditor : UserControl
             return false;
         }
         var endMode = Value<RecurrenceEndMode>(_endMode);
-        if (endMode is RecurrenceEndMode.OnDate && startAt is not null && _until.Value.Date < startAt.Value.Date)
+        if (endMode is RecurrenceEndMode.OnDate && startAt is not null && _untilDate.Date < startAt.Value.Date)
         {
             error = "重复截止日期不能早于首次发生日期。";
             return false;
@@ -182,7 +190,7 @@ internal sealed class RecurrenceEditor : UserControl
         item.RepeatDayOfWeek = Value<DayOfWeek>(_day);
         item.RecurrenceEndMode = endMode;
         item.MissedOccurrencePolicy = Value<MissedOccurrencePolicy>(_missed);
-        item.RepeatUntil = endMode is RecurrenceEndMode.OnDate ? _until.Value.Date : null;
+        item.RepeatUntil = endMode is RecurrenceEndMode.OnDate ? _untilDate.Date : null;
         item.RepeatCount = endMode is RecurrenceEndMode.AfterCount ? (int)_count.Value : 0;
         return true;
     }
@@ -198,6 +206,16 @@ internal sealed class RecurrenceEditor : UserControl
         _count.Visible = endMode is RecurrenceEndMode.AfterCount;
         _endPanel.Controls[^1].Visible = endMode is RecurrenceEndMode.AfterCount;
     }
+
+    private void ChooseUntilDate()
+    {
+        using var picker = new DateRangePickerDialog(_untilDate, _untilDate, true, false);
+        if (picker.ShowDialog(FindForm()) != DialogResult.OK) return;
+        _untilDate = picker.HasStart ? picker.StartDate : picker.EndDate;
+        RefreshUntilText();
+    }
+
+    private void RefreshUntilText() => _until.Text = $"{_untilDate:yyyy-MM-dd}  ·  {LunarDate.FullText(_untilDate)}";
 
     private static void Add(TableLayoutPanel layout, string label, Control control)
     {

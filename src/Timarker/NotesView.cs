@@ -4,13 +4,13 @@ namespace Timarker;
 
 public sealed class NotesView : UserControl
 {
-    private static readonly Color AppBack = Color.FromArgb(246, 247, 251);
-    private static readonly Color Surface = Color.White;
-    private static readonly Color TextMain = Color.FromArgb(31, 41, 55);
-    private static readonly Color TextMuted = Color.FromArgb(100, 116, 139);
-    private static readonly Color Accent = Color.FromArgb(37, 99, 235);
-    private static readonly Color AccentSoft = Color.FromArgb(239, 246, 255);
-    private static readonly Color Border = Color.FromArgb(226, 232, 240);
+    private static Color AppBack => AppTheme.AppBack;
+    private static Color Surface => AppTheme.Surface;
+    private static Color TextMain => AppTheme.Text;
+    private static Color TextMuted => AppTheme.Muted;
+    private static Color Accent => UiTokens.Primary;
+    private static Color AccentSoft => AppTheme.Selected;
+    private static Color Border => AppTheme.Border;
 
     private readonly List<NoteItem> _notes;
     private readonly Action _save;
@@ -24,15 +24,34 @@ public sealed class NotesView : UserControl
     };
     private readonly TextBox _search = new() { PlaceholderText = "搜索便签内容或词条", BorderStyle = BorderStyle.None };
     private readonly TextBox _title = new() { Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, PlaceholderText = "标题（可选）" };
-    private readonly TextBox _content = new() { Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, Multiline = true, PlaceholderText = "写点什么……" };
+    private readonly TextBox _content = new() { Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, Multiline = true, ScrollBars = ScrollBars.Vertical, PlaceholderText = "写点什么……" };
     private readonly TextBox _tags = new() { Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, PlaceholderText = "添加词条（可选）" };
-    private readonly CheckBox _pinned = new() { Text = "置顶", AutoSize = true, ForeColor = TextMuted, Margin = new Padding(0, 10, 12, 0) };
+    private readonly CheckBox _pinned = new()
+    {
+        Text = "     置顶",
+        Appearance = Appearance.Button,
+        AutoSize = false,
+        Size = new Size(82, 36),
+        FlatStyle = FlatStyle.Flat,
+        TextAlign = ContentAlignment.MiddleCenter,
+        ForeColor = TextMuted,
+        BackColor = Surface,
+        Margin = new Padding(0, 5, 8, 0),
+        Cursor = Cursors.Hand
+    };
     private readonly TableLayoutPanel _shell;
     private readonly Panel _composerHost = new() { Dock = DockStyle.Fill, Margin = new Padding(4, 8, 4, 12) };
     private Control? _collapsedComposer;
     private Control? _expandedComposer;
     private Button? _deleteButton;
     private Guid? _editingId;
+    private string _baselineTitle = "";
+    private string _baselineContent = "";
+    private string _baselineTags = "";
+    private bool _baselinePinned;
+    private readonly System.Windows.Forms.Timer _cardClickTimer = new() { Interval = SystemInformation.DoubleClickTime };
+    private readonly System.Windows.Forms.Timer _searchTimer = new() { Interval = 150 };
+    private Action? _pendingCardClick;
 
     public NotesView(List<NoteItem> notes, Action save)
     {
@@ -55,6 +74,18 @@ public sealed class NotesView : UserControl
         _shell.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         BuildUi();
+        _cardClickTimer.Tick += (_, _) =>
+        {
+            _cardClickTimer.Stop();
+            var action = _pendingCardClick;
+            _pendingCardClick = null;
+            action?.Invoke();
+        };
+        _searchTimer.Tick += (_, _) =>
+        {
+            _searchTimer.Stop();
+            RefreshBoard();
+        };
         L.Apply(this);
         RefreshBoard();
     }
@@ -72,10 +103,19 @@ public sealed class NotesView : UserControl
         _shell.Controls.Add(_board, 0, 2);
         Controls.Add(_shell);
 
-        _search.TextChanged += (_, _) => RefreshBoard();
+        _search.TextChanged += (_, _) =>
+        {
+            _searchTimer.Stop();
+            _searchTimer.Start();
+        };
         _content.KeyDown += EditorKeyDown;
         _title.KeyDown += EditorKeyDown;
         _tags.KeyDown += EditorKeyDown;
+        _pinned.FlatAppearance.BorderSize = 0;
+        _pinned.CheckedChanged += (_, _) => StylePinButton();
+        _pinned.Paint += (_, e) => DrawPin(e.Graphics, 12, 8, _pinned.Checked ? Color.White : Accent);
+        ModernUi.Round(_pinned, 9);
+        StylePinButton();
     }
 
     private Control BuildHeader()
@@ -123,35 +163,36 @@ public sealed class NotesView : UserControl
         var form = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, ColumnCount = 1, Margin = Padding.Empty };
         form.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         form.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        form.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
+        form.RowStyles.Add(new RowStyle(SizeType.Absolute, 96));
         _title.Font = new Font(Font.FontFamily, 11F, FontStyle.Bold);
         _content.Font = new Font(Font.FontFamily, 10F);
         form.Controls.Add(_title, 0, 0);
         form.Controls.Add(_content, 0, 1);
 
-        var footer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Margin = Padding.Empty };
+        var footer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Margin = Padding.Empty };
         footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 302));
+        footer.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
+        footer.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
         var tagsField = BorderedPanel(Color.FromArgb(248, 250, 252), new Padding(10, 8, 10, 6));
-        tagsField.Margin = new Padding(0, 6, 16, 0);
+        tagsField.Margin = new Padding(0, 4, 0, 4);
         _tags.BackColor = tagsField.BackColor;
         tagsField.Controls.Add(_tags);
         footer.Controls.Add(tagsField, 0, 0);
 
-        var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, FlowDirection = FlowDirection.LeftToRight, Margin = Padding.Empty };
+        var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, FlowDirection = FlowDirection.RightToLeft, Margin = Padding.Empty };
         var done = ActionButton("完成", true, 74);
         done.Click += (_, _) => FinishEditor();
         var cancel = ActionButton("取消", false, 66);
         cancel.Click += (_, _) => HideEditor();
         _deleteButton = ActionButton("删除", false, 66);
-        _deleteButton.ForeColor = Color.FromArgb(220, 38, 38);
+        _deleteButton.ForeColor = UiTokens.Danger;
         _deleteButton.Visible = false;
         _deleteButton.Click += (_, _) => DeleteCurrent();
-        actions.Controls.Add(_pinned);
-        actions.Controls.Add(_deleteButton);
-        actions.Controls.Add(done);
         actions.Controls.Add(cancel);
-        footer.Controls.Add(actions, 1, 0);
+        actions.Controls.Add(done);
+        actions.Controls.Add(_deleteButton);
+        actions.Controls.Add(_pinned);
+        footer.Controls.Add(actions, 0, 1);
         form.Controls.Add(footer, 0, 2);
         expanded.Controls.Add(form);
         expanded.Visible = false;
@@ -226,6 +267,8 @@ public sealed class NotesView : UserControl
             Cursor = Cursors.Hand
         };
         ModernUi.Round(frame, 12);
+        frame.Paint += (_, e) => ModernUi.DrawBorder(e.Graphics, frame.ClientRectangle, 12,
+            _editingId == note.Id ? Color.FromArgb(96, 165, 250) : Border, 1.2F);
         var card = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
@@ -235,6 +278,7 @@ public sealed class NotesView : UserControl
             Margin = Padding.Empty,
             Padding = new Padding(16, 0, 16, 10)
         };
+        ModernUi.Round(card, 11);
         card.RowStyles.Add(new RowStyle(SizeType.Absolute, 4));
         card.RowStyles.Add(new RowStyle(SizeType.Absolute, 43));
         card.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -270,8 +314,10 @@ public sealed class NotesView : UserControl
         var menu = new ModernContextMenuStrip();
         menu.Items.Add(note.IsPinned ? "取消置顶" : "置顶", null, (_, _) => TogglePinned(note));
         menu.Items.Add("编辑", null, (_, _) => ShowEditor(note));
+        menu.Items.Add("悬浮到桌面", null, (_, _) => FloatNote(note));
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("删除", null, (_, _) => Delete(note));
+        var delete = menu.Items.Add("删除", null, (_, _) => Delete(note));
+        delete.Tag = "danger";
         L.Apply(menu);
         frame.ContextMenuStrip = menu;
         frame.Controls.Add(card);
@@ -289,31 +335,35 @@ public sealed class NotesView : UserControl
             frame.Controls.Add(pin);
             pin.BringToFront();
         }
-        HookCard(frame, () => ShowEditor(note), menu);
+        HookCard(frame, () => ShowEditor(note), () => FloatNote(note), menu);
         return frame;
     }
 
+    private void FloatNote(NoteItem note) => new FloatingNoteForm(note, _save, RefreshBoard).Show();
+
     private void ShowEditor(NoteItem? note = null)
     {
+        if (_expandedComposer?.Visible == true && _editingId != note?.Id && !ConfirmPendingChanges()) return;
         _editingId = note?.Id;
         _title.Text = note?.Title ?? string.Empty;
         _content.Text = note?.Content ?? string.Empty;
         _tags.Text = note is null ? string.Empty : EffectiveTags(note);
         _pinned.Checked = note?.IsPinned ?? false;
+        CaptureBaseline();
         if (_deleteButton is not null) _deleteButton.Visible = note is not null;
         if (_collapsedComposer is not null) _collapsedComposer.Visible = false;
         if (_expandedComposer is not null) _expandedComposer.Visible = true;
-        _shell.RowStyles[1].Height = 224;
+        _shell.RowStyles[1].Height = 284;
         RefreshBoard();
         _content.Focus();
     }
 
-    private void FinishEditor()
+    private bool FinishEditor()
     {
         if (string.IsNullOrWhiteSpace(_title.Text) && string.IsNullOrWhiteSpace(_content.Text))
         {
             MessageBox.Show(L.T("至少写下一点内容。"), L.T("便签是空的"), MessageBoxButtons.OK, MessageBoxIcon.Information);
-            return;
+            return false;
         }
 
         var note = _editingId is Guid id ? _notes.FirstOrDefault(x => x.Id == id) : null;
@@ -330,6 +380,7 @@ public sealed class NotesView : UserControl
         note.UpdatedAt = DateTime.Now;
         _save();
         HideEditor();
+        return true;
     }
 
     private void HideEditor()
@@ -344,6 +395,36 @@ public sealed class NotesView : UserControl
         if (_collapsedComposer is not null) _collapsedComposer.Visible = true;
         _shell.RowStyles[1].Height = 76;
         RefreshBoard();
+    }
+
+    public bool ConfirmCanLeave() => _expandedComposer?.Visible != true || ConfirmPendingChanges();
+
+    private bool ConfirmPendingChanges()
+    {
+        if (!HasUnsavedChanges()) return true;
+        var result = MessageBox.Show(
+            L.T("这张便签有尚未保存的修改。是否保存后继续？"),
+            L.T("保存便签修改"),
+            MessageBoxButtons.YesNoCancel,
+            MessageBoxIcon.Question);
+        if (result == DialogResult.Cancel) return false;
+        if (result == DialogResult.Yes) return FinishEditor();
+        HideEditor();
+        return true;
+    }
+
+    private bool HasUnsavedChanges() =>
+        _title.Text != _baselineTitle
+        || _content.Text != _baselineContent
+        || _tags.Text != _baselineTags
+        || _pinned.Checked != _baselinePinned;
+
+    private void CaptureBaseline()
+    {
+        _baselineTitle = _title.Text;
+        _baselineContent = _content.Text;
+        _baselineTags = _tags.Text;
+        _baselinePinned = _pinned.Checked;
     }
 
     private void EditorKeyDown(object? sender, KeyEventArgs e)
@@ -398,37 +479,44 @@ public sealed class NotesView : UserControl
     {
         var panel = new Panel { Dock = DockStyle.Fill, BackColor = backColor, Padding = padding };
         ModernUi.Round(panel, 10);
-        panel.Paint += (_, e) =>
-        {
-            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            using var path = ModernUi.RoundedPath(new Rectangle(0, 0, panel.Width - 1, panel.Height - 1), 10);
-            using var pen = new Pen(Border);
-            e.Graphics.DrawPath(pen, path);
-        };
+        panel.Paint += (_, e) => ModernUi.DrawBorder(e.Graphics, panel.ClientRectangle, 10, Border, 1.2F);
         return panel;
     }
 
-    private static Button ActionButton(string text, bool primary, int width) => new()
+    private static Button ActionButton(string text, bool primary, int width)
     {
-        Text = text,
-        Width = width,
-        Height = 36,
-        FlatStyle = FlatStyle.Flat,
-        BackColor = primary ? Accent : Surface,
-        ForeColor = primary ? Color.White : TextMuted,
-        Margin = new Padding(0, 5, 8, 0),
-        Cursor = Cursors.Hand,
-        UseVisualStyleBackColor = false
-    };
+        var button = new ModernButton
+        {
+            Text = text,
+            Width = width,
+            Height = 36,
+            BackColor = primary ? Accent : Surface,
+            ForeColor = primary ? Color.White : TextMuted,
+            Margin = new Padding(0, 5, 8, 0),
+            Cursor = Cursors.Hand,
+            UseVisualStyleBackColor = false
+        };
+        button.FlatAppearance.BorderColor = primary ? Accent : Border;
+        return button;
+    }
 
-    private static void DrawPin(Graphics graphics)
+    private void StylePinButton()
+    {
+        _pinned.BackColor = _pinned.Checked ? Accent : AccentSoft;
+        _pinned.ForeColor = _pinned.Checked ? Color.White : Accent;
+    }
+
+    private static void DrawPin(Graphics graphics) => DrawPin(graphics, 0, 0, Accent);
+
+    private static void DrawPin(Graphics graphics, int offsetX, int offsetY, Color color)
     {
         graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-        using var brush = new SolidBrush(Accent);
-        using var pen = new Pen(Accent, 1.8F) { StartCap = System.Drawing.Drawing2D.LineCap.Round, EndCap = System.Drawing.Drawing2D.LineCap.Round };
-        graphics.FillEllipse(brush, 8, 3, 8, 8);
-        graphics.DrawLine(pen, 6, 12, 18, 12);
-        graphics.DrawLine(pen, 12, 9, 12, 21);
+        using var pen = new Pen(color, 1.8F) { StartCap = System.Drawing.Drawing2D.LineCap.Round, EndCap = System.Drawing.Drawing2D.LineCap.Round };
+        graphics.DrawArc(pen, offsetX + 8, offsetY + 3, 8, 7, 180, 180);
+        graphics.DrawLine(pen, offsetX + 8, offsetY + 7, offsetX + 6, offsetY + 12);
+        graphics.DrawLine(pen, offsetX + 16, offsetY + 7, offsetX + 18, offsetY + 12);
+        graphics.DrawLine(pen, offsetX + 6, offsetY + 12, offsetX + 18, offsetY + 12);
+        graphics.DrawLine(pen, offsetX + 12, offsetY + 12, offsetX + 12, offsetY + 21);
     }
 
     private static void HookClick(Control root, Action action)
@@ -438,12 +526,23 @@ public sealed class NotesView : UserControl
         foreach (Control child in root.Controls) HookClick(child, action);
     }
 
-    private static void HookCard(Control root, Action action, ContextMenuStrip menu)
+    private void HookCard(Control root, Action clickAction, Action doubleClickAction, ContextMenuStrip menu)
     {
         root.Cursor = Cursors.Hand;
-        root.Click += (_, _) => action();
+        root.Click += (_, _) =>
+        {
+            _pendingCardClick = clickAction;
+            _cardClickTimer.Stop();
+            _cardClickTimer.Start();
+        };
+        root.DoubleClick += (_, _) =>
+        {
+            _cardClickTimer.Stop();
+            _pendingCardClick = null;
+            doubleClickAction();
+        };
         root.ContextMenuStrip = menu;
-        foreach (Control child in root.Controls) HookCard(child, action, menu);
+        foreach (Control child in root.Controls) HookCard(child, clickAction, doubleClickAction, menu);
     }
 
     private static string CardTitle(NoteItem note) => string.IsNullOrWhiteSpace(note.Title) ? FirstLine(note.Content) : note.Title;

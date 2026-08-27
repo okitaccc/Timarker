@@ -5,20 +5,21 @@ namespace Timarker;
 
 public sealed class CalendarViewForm : Form
 {
-    private static readonly Color AppBack = Color.FromArgb(246, 247, 251);
-    private static readonly Color CardBack = Color.White;
-    private static readonly Color TextMain = Color.FromArgb(15, 23, 42);
-    private static readonly Color TextMuted = Color.FromArgb(100, 116, 139);
-    private static readonly Color Border = Color.FromArgb(226, 232, 240);
-    private static readonly Color Accent = Color.FromArgb(37, 99, 235);
+    private static Color AppBack => UiTokens.AppBackground;
+    private static Color CardBack => UiTokens.Surface;
+    private static Color TextMain => UiTokens.Text;
+    private static Color TextMuted => UiTokens.TextMuted;
+    private static Color Border => UiTokens.Border;
+    private static Color Accent => UiTokens.Primary;
 
     private readonly IReadOnlyList<EventItem> _events;
+    private readonly IReadOnlyList<Folder> _folders;
     private readonly Action<EventItem, DateTime> _editItem;
     private readonly Action<DateTime> _createItem;
     private readonly Action<EventItem> _completeItem;
     private readonly Action<EventItem> _togglePauseItem;
     private readonly Action<EventItem> _deleteItem;
-    private readonly Action<EventItem, EventItem> _addToFolder;
+    private readonly Action<EventItem, Folder> _addToFolder;
     private readonly Action<EventItem> _createFolder;
     private readonly Action<string> _createFolderFromTag;
     private readonly MonthGrid _monthGrid;
@@ -30,19 +31,21 @@ public sealed class CalendarViewForm : Form
         DrawMode = DrawMode.OwnerDrawFixed,
         ItemHeight = EventCardRenderer.ItemHeight
     };
-    private readonly Button _monthTitle = new() { Dock = DockStyle.Fill, Font = new Font("Microsoft YaHei UI", 15F, FontStyle.Bold), ForeColor = TextMain, BackColor = Color.White, FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleLeft, Cursor = Cursors.Hand };
+    private readonly Button _monthTitle = new() { Dock = DockStyle.Fill, Font = new Font("Microsoft YaHei UI", 15F, FontStyle.Bold), ForeColor = TextMain, BackColor = CardBack, FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleLeft, Cursor = Cursors.Hand };
     private readonly Label _monthSummary = new() { Dock = DockStyle.Fill, ForeColor = TextMuted };
     private readonly Label _dayTitle = new() { Dock = DockStyle.Fill, Font = new Font("Microsoft YaHei UI", 13F, FontStyle.Bold), ForeColor = TextMain };
     private readonly Label _daySummary = new() { Dock = DockStyle.Fill, ForeColor = TextMuted };
     private readonly CheckBox _showLunar = new() { Text = "农历", Appearance = Appearance.Button, AutoSize = false, Width = 86, Height = 32, FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleCenter, Cursor = Cursors.Hand };
     private DateTime _visibleMonth = new(DateTime.Today.Year, DateTime.Today.Month, 1);
     private DateTime _selectedDay = DateTime.Today;
+    private bool _resizeRefreshPending;
 
-    public CalendarViewForm(IReadOnlyList<EventItem> events, Action<EventItem, DateTime> editItem, Action<DateTime> createItem,
-        Action<EventItem> completeItem, Action<EventItem> togglePauseItem, Action<EventItem> deleteItem, Action<EventItem, EventItem> addToFolder,
+    public CalendarViewForm(IReadOnlyList<EventItem> events, IReadOnlyList<Folder> folders, Action<EventItem, DateTime> editItem, Action<DateTime> createItem,
+        Action<EventItem> completeItem, Action<EventItem> togglePauseItem, Action<EventItem> deleteItem, Action<EventItem, Folder> addToFolder,
         Action<EventItem> createFolder, Action<string> createFolderFromTag)
     {
         _events = events;
+        _folders = folders;
         _editItem = editItem;
         _createItem = createItem;
         _completeItem = completeItem;
@@ -124,7 +127,7 @@ public sealed class CalendarViewForm : Form
     private static void StyleLunarToggle(CheckBox toggle)
     {
         toggle.Text = toggle.Checked ? "农历  开" : "农历  关";
-        toggle.BackColor = toggle.Checked ? Color.FromArgb(239, 246, 255) : Color.White;
+        toggle.BackColor = toggle.Checked ? AppTheme.Selected : CardBack;
         toggle.ForeColor = toggle.Checked ? Accent : TextMuted;
         toggle.FlatAppearance.BorderColor = toggle.Checked ? Color.FromArgb(147, 197, 253) : Border;
     }
@@ -165,7 +168,7 @@ public sealed class CalendarViewForm : Form
         };
         next.Click += (_, _) => MoveMonth(1);
         _monthTitle.FlatAppearance.BorderSize = 0;
-        _monthTitle.FlatAppearance.MouseOverBackColor = Color.FromArgb(239, 246, 255);
+        _monthTitle.FlatAppearance.MouseOverBackColor = AppTheme.Selected;
         _monthTitle.Click += (_, _) => ChooseVisibleMonth();
 
         header.Controls.Add(_monthTitle, 0, 0);
@@ -280,9 +283,9 @@ public sealed class CalendarViewForm : Form
             }
 
             var addToFolder = new ToolStripMenuItem("加入收藏夹");
-            foreach (var folder in _events.Where(x => x.IsGroup).OrderBy(x => x.Title))
+            foreach (var folder in _folders.OrderBy(x => x.Name))
             {
-                addToFolder.DropDownItems.Add(folder.Title, null, (_, _) => RunAndRefresh(() => _addToFolder(item, folder)));
+                addToFolder.DropDownItems.Add(folder.Name, null, (_, _) => RunAndRefresh(() => _addToFolder(item, folder)));
             }
             if (addToFolder.DropDownItems.Count == 0) addToFolder.DropDownItems.Add("暂无收藏夹").Enabled = false;
             menu.Items.Add(addToFolder);
@@ -298,7 +301,7 @@ public sealed class CalendarViewForm : Form
 
             menu.Items.Add(new ToolStripSeparator());
             var delete = menu.Items.Add("删除", null, (_, _) => RunAndRefresh(() => _deleteItem(item)));
-            delete.ForeColor = Color.FromArgb(220, 38, 38);
+            delete.ForeColor = UiTokens.Danger;
         };
         _items.ContextMenuStrip = menu;
     }
@@ -342,13 +345,20 @@ public sealed class CalendarViewForm : Form
 
     private void RefreshAfterResize()
     {
-        if (!IsHandleCreated)
+        if (!IsHandleCreated || _resizeRefreshPending)
         {
             return;
         }
 
+        _resizeRefreshPending = true;
         BeginInvoke((MethodInvoker)(() =>
         {
+            _resizeRefreshPending = false;
+            if (IsDisposed)
+            {
+                return;
+            }
+
             PerformLayout();
             _monthGrid.Invalidate();
             _items.Invalidate();
@@ -422,12 +432,12 @@ public sealed class CalendarViewForm : Form
 
     private static Button SecondaryButton(string text)
     {
-        var button = new Button
+        var button = new ModernButton
         {
             Text = text,
             Dock = DockStyle.Fill,
             Height = 36,
-            BackColor = Color.White,
+            BackColor = CardBack,
             ForeColor = TextMain,
             FlatStyle = FlatStyle.Flat,
             Margin = new Padding(4, 8, 4, 4)
@@ -480,7 +490,7 @@ public sealed class CalendarViewForm : Form
             EventStatus.Done => Color.FromArgb(22, 163, 74),
             EventStatus.Skipped => Color.FromArgb(100, 116, 139),
             EventStatus.Postponed => Color.FromArgb(217, 119, 6),
-            EventStatus.Overdue => Color.FromArgb(220, 38, 38),
+            EventStatus.Overdue => UiTokens.Danger,
             EventStatus.Cancelled => Color.FromArgb(100, 116, 139),
             EventStatus.InProgress => Accent,
             _ => Color.FromArgb(79, 70, 229)
@@ -524,13 +534,9 @@ public sealed class CalendarViewForm : Form
             var cellWidth = Math.Max(1, ClientSize.Width / 7);
             var cellHeight = Math.Max(1, ClientSize.Height / 6);
 
-            using var mutedBrush = new SolidBrush(TextMuted);
-            using var textBrush = new SolidBrush(TextMain);
-            using var whiteBrush = new SolidBrush(Color.White);
             using var selectedBrush = new SolidBrush(Accent);
             using var todayPen = new Pen(Color.FromArgb(147, 197, 253), 1.5F);
-            using var hoverBrush = new SolidBrush(Color.FromArgb(248, 250, 252));
-            using var eventBrush = new SolidBrush(Accent);
+            using var hoverBrush = new SolidBrush(AppTheme.SurfaceAlt);
 
             for (var i = 0; i < 42; i++)
             {
@@ -560,6 +566,12 @@ public sealed class CalendarViewForm : Form
                     e.Graphics.DrawPath(todayPen, todayPath);
                 }
 
+                using (var cellPath = RoundRect(rect, 12))
+                using (var cellPen = new Pen(selected ? Accent : Border, selected ? 1.5F : 1F))
+                {
+                    e.Graphics.DrawPath(cellPen, cellPath);
+                }
+
                 var events = _eventsOnDay(day);
                 var count = events.Count;
                 var dayAccent = count > 0 ? DayAccent(events) : TextMain;
@@ -581,7 +593,8 @@ public sealed class CalendarViewForm : Form
                     TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
                 if (_showLunar && inMonth)
                 {
-                    TextRenderer.DrawText(e.Graphics, LunarDate.Text(day), new Font(Font.FontFamily, 7.5F), new Rectangle(rect.Left + 8, rect.Top + 27, rect.Width - 16, 17), selected ? Color.White : TextMuted, TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+                    using var lunarFont = new Font(Font.FontFamily, 7.5F);
+                    TextRenderer.DrawText(e.Graphics, LunarDate.Text(day), lunarFont, new Rectangle(rect.Left + rect.Width / 2, rect.Top + 9, rect.Width / 2 - 8, 20), selected ? Color.White : TextMuted, TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
                 }
                 if (!ReferenceEquals(dayFont, Font))
                 {
@@ -604,28 +617,38 @@ public sealed class CalendarViewForm : Form
                     TextRenderer.DrawText(e.Graphics, badge, badgeFont, badgeRect, dayAccent, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
                 }
 
-                if (cellHeight > 76 && rect.Width > 58)
+                var drewSummary = false;
+                if (cellHeight > 68 && rect.Width > 58)
                 {
-                    var labelTop = rect.Top + (_showLunar ? 47 : 34);
-                    using var itemFont = new Font(Font.FontFamily, 7.5F);
-                    foreach (var item in events.Take(2))
+                    var summaries = TypeSummary(events).Where(x => x.Count > 0).ToArray();
+                    var labelTop = rect.Top + 34;
+                    var gap = 3;
+                    var labelWidth = (rect.Width - 19) / 2;
+                    var useFullLabel = labelWidth >= 44;
+                    using var itemFont = new Font(Font.FontFamily, 7F, FontStyle.Bold);
+                    for (var summaryIndex = 0; summaryIndex < Math.Min(4, summaries.Length); summaryIndex++)
                     {
-                        var labelRect = new Rectangle(rect.Left + 8, labelTop, rect.Width - 16, 17);
-                        using var labelPath = RoundRect(labelRect, 7);
-                        using var labelBrush = new SolidBrush(selected ? Color.FromArgb(255, 255, 255) : SoftColor(dayAccent));
+                        var summary = summaries[summaryIndex];
+                        var labelRect = new Rectangle(
+                            rect.Left + 8 + summaryIndex % 2 * (labelWidth + gap),
+                            labelTop + summaryIndex / 2 * 17,
+                            labelWidth,
+                            15);
+                        using var labelPath = RoundRect(labelRect, 6);
+                        using var labelBrush = new SolidBrush(selected ? Color.White : SoftColor(summary.Color));
                         e.Graphics.FillPath(labelBrush, labelPath);
                         TextRenderer.DrawText(
                             e.Graphics,
-                            item.Title,
+                            $"{(useFullLabel ? summary.Full : summary.Short)} {summary.Count}",
                             itemFont,
-                            new Rectangle(labelRect.Left + 6, labelRect.Top, labelRect.Width - 10, labelRect.Height),
-                            selected ? dayAccent : dayAccent,
-                            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
-                        labelTop += 19;
+                            labelRect,
+                            summary.Color,
+                            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
                     }
+                    drewSummary = summaries.Length > 0;
                 }
 
-                var dotCount = Math.Min(3, count);
+                var dotCount = drewSummary ? 0 : Math.Min(3, count);
                 var startX = rect.Left + 9;
                 var dotY = rect.Bottom - 14;
                 for (var dot = 0; dot < dotCount; dot++)
@@ -683,7 +706,7 @@ public sealed class CalendarViewForm : Form
         {
             if (events.Any(e => e.Status is EventStatus.Overdue))
             {
-                return Color.FromArgb(220, 38, 38);
+                return UiTokens.Danger;
             }
 
             var highest = events
@@ -699,8 +722,25 @@ public sealed class CalendarViewForm : Form
             };
         }
 
+        private static (string Short, string Full, int Count, Color Color)[] TypeSummary(IReadOnlyList<EventItem> events)
+        {
+            var birthdays = events.Count(e => e.Type is EventType.Birthday);
+            var anniversaries = events.Count(e => e.Type is EventType.Anniversary);
+            var recurring = events.Count(e => e.Type is EventType.Recurring or EventType.Habit);
+            var ordinary = events.Count - birthdays - anniversaries - recurring;
+            return
+            [
+                ("普", "普通", ordinary, Accent),
+                ("周", "周期", recurring, Color.FromArgb(124, 58, 237)),
+                ("生", "生日", birthdays, Color.FromArgb(219, 39, 119)),
+                ("纪", "纪念", anniversaries, Color.FromArgb(217, 119, 6))
+            ];
+        }
+
         private static Color SoftColor(Color color)
         {
+            if (AppTheme.IsDark)
+                return Color.FromArgb((AppTheme.Surface.R * 4 + color.R) / 5, (AppTheme.Surface.G * 4 + color.G) / 5, (AppTheme.Surface.B * 4 + color.B) / 5);
             return Color.FromArgb(
                 245 - (245 - color.R) / 9,
                 248 - (248 - color.G) / 9,

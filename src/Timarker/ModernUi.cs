@@ -7,6 +7,7 @@ namespace Timarker;
 internal static class ModernUi
 {
     private static readonly ConditionalWeakTable<Control, object> Styled = new();
+    private static readonly ConditionalWeakTable<Control, object> Outlined = new();
 
     public static void Style(Control control)
     {
@@ -22,12 +23,31 @@ internal static class ModernUi
         }
         if (control is ModernNumericUpDown modernNumber)
         {
-            Round(modernNumber, 9);
+            Round(modernNumber, UiTokens.RadiusMedium);
             return;
         }
         if (control is ModernTextBox modernText)
         {
-            Round(modernText, 9);
+            Round(modernText, UiTokens.RadiusMedium);
+            return;
+        }
+        if (control is Button button)
+        {
+            var hadBorder = button.FlatAppearance.BorderSize > 0;
+            button.FlatStyle = FlatStyle.Flat;
+            button.FlatAppearance.BorderSize = 0;
+            button.FlatAppearance.BorderColor = button.BackColor == Color.White
+                ? UiTokens.Border
+                : button.BackColor;
+            if (hadBorder) Outline(button, UiTokens.RadiusMedium, () => button.FlatAppearance.BorderColor);
+            else Round(button, UiTokens.RadiusMedium);
+            return;
+        }
+        if (control is CheckBox { Appearance: Appearance.Button } toggle)
+        {
+            toggle.FlatStyle = FlatStyle.Flat;
+            toggle.FlatAppearance.BorderSize = 0;
+            Outline(toggle, UiTokens.RadiusMedium, () => toggle.FlatAppearance.BorderColor);
             return;
         }
         if (control is ComboBox combo)
@@ -35,16 +55,8 @@ internal static class ModernUi
             StyleComboBox(combo);
             return;
         }
-        if (control is TextBox textBox && textBox.BorderStyle != BorderStyle.None)
-        {
-            textBox.BorderStyle = BorderStyle.FixedSingle;
-            Round(textBox, 8);
-            return;
-        }
-
         var radius = control switch
         {
-            Button => 7,
             DateTimePicker or NumericUpDown => 6,
             Panel { BorderStyle: BorderStyle.FixedSingle } => 10,
             _ => 0
@@ -54,7 +66,7 @@ internal static class ModernUi
 
     private static void StyleComboBox(ComboBox combo)
     {
-        Round(combo, 8);
+        Round(combo, UiTokens.RadiusSmall);
         combo.FlatStyle = FlatStyle.Flat;
     }
 
@@ -74,6 +86,8 @@ internal static class ModernUi
     public static void Outline(Control control, int radius, Func<Color> borderColor)
     {
         Round(control, radius);
+        if (Outlined.TryGetValue(control, out _)) return;
+        Outlined.Add(control, new object());
         control.Paint += (_, e) => DrawBorder(e.Graphics, control.ClientRectangle, radius, borderColor());
     }
 
@@ -111,39 +125,70 @@ internal static class ModernUi
     public static void Style(ToolStripDropDown menu)
     {
         menu.Renderer = ModernMenuRenderer.Instance;
-        menu.Padding = new Padding(7, 7, 7, 7);
-        menu.Font = new Font("Microsoft YaHei UI", 9F);
+        menu.Padding = new Padding(5, 6, 5, 6);
+        menu.Font = new Font(UiTokens.FontFamily, UiTokens.TextBody * AppTheme.FontScale);
         if (menu is ToolStripDropDownMenu dropDownMenu) dropDownMenu.ShowImageMargin = false;
-        menu.MinimumSize = new Size(156, 0);
+        menu.MinimumSize = new Size(168, 0);
         menu.SizeChanged -= MenuSizeChanged;
         menu.SizeChanged += MenuSizeChanged;
-        SetRegion(menu, 10);
+        SetRegion(menu, UiTokens.RadiusMedium);
     }
 
     private static void MenuSizeChanged(object? sender, EventArgs e)
     {
-        if (sender is ToolStripDropDown menu) SetRegion(menu, 10);
+        if (sender is ToolStripDropDown menu) SetRegion(menu, UiTokens.RadiusMedium);
     }
 
 }
 
 internal sealed class ModernButton : Button
 {
-    public int CornerRadius { get; set; } = 9;
+    public int CornerRadius { get; set; } = UiTokens.RadiusMedium;
+    protected override bool ShowFocusCues => false;
+    private Color _restingBackColor;
+    private bool _hovered;
 
     public ModernButton()
     {
         FlatStyle = FlatStyle.Flat;
         FlatAppearance.BorderSize = 0;
-        FlatAppearance.BorderColor = Color.FromArgb(148, 163, 184);
+        FlatAppearance.BorderColor = UiTokens.Border;
+        Height = UiTokens.ControlHeight;
+        MinimumSize = new Size(0, UiTokens.ControlHeight);
+        _restingBackColor = BackColor;
         ModernUi.Round(this, CornerRadius);
     }
+
+    public override void NotifyDefault(bool value) => base.NotifyDefault(false);
 
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
-        var color = Enabled ? FlatAppearance.BorderColor : Color.FromArgb(203, 213, 225);
+        var color = Enabled ? Focused ? UiTokens.Focus : FlatAppearance.BorderColor : UiTokens.Border;
         ModernUi.DrawBorder(e.Graphics, ClientRectangle, CornerRadius, color, 1.2F);
+    }
+
+    protected override void OnBackColorChanged(EventArgs e)
+    {
+        base.OnBackColorChanged(e);
+        if (!_hovered) _restingBackColor = BackColor;
+    }
+
+    protected override void OnMouseEnter(EventArgs e)
+    {
+        base.OnMouseEnter(e);
+        if (!Enabled) return;
+        _restingBackColor = BackColor;
+        _hovered = true;
+        BackColor = _restingBackColor == UiTokens.Primary ? UiTokens.PrimaryHover : UiTokens.Hover;
+    }
+
+    protected override void OnMouseLeave(EventArgs e)
+    {
+        base.OnMouseLeave(e);
+        if (!_hovered) return;
+        _hovered = false;
+        BackColor = _restingBackColor;
     }
 }
 
@@ -153,7 +198,7 @@ internal sealed class ModernNumericUpDown : UserControl
     {
         BorderStyle = BorderStyle.None,
         TextAlign = HorizontalAlignment.Left,
-        BackColor = Color.White
+        BackColor = AppTheme.Field
     };
     private decimal _minimum;
     private decimal _maximum = 100;
@@ -202,21 +247,30 @@ internal sealed class ModernNumericUpDown : UserControl
     public ModernNumericUpDown()
     {
         AutoSize = false;
-        Size = new Size(82, 30);
-        MinimumSize = new Size(72, 30);
-        BackColor = Color.White;
+        Size = new Size(82, UiTokens.ControlHeight);
+        MinimumSize = new Size(72, UiTokens.ControlHeight);
+        BackColor = AppTheme.Field;
+        ForeColor = AppTheme.Text;
         Controls.Add(_editor);
         _editor.Text = "0";
         _editor.Enter += (_, _) => Invalidate();
         _editor.Leave += (_, _) => { CommitText(); Invalidate(); };
         _editor.KeyDown += EditorKeyDown;
-        ModernUi.Round(this, 9);
+        ModernUi.Round(this, UiTokens.RadiusMedium);
     }
 
     protected override void OnLayout(LayoutEventArgs e)
     {
         base.OnLayout(e);
         _editor.SetBounds(10, Math.Max(5, (Height - _editor.PreferredHeight) / 2), Math.Max(18, Width - 50), _editor.PreferredHeight);
+    }
+
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        MinimumSize = new Size(MinimumSize.Width, UiTokens.ControlHeight);
+        if (Height < UiTokens.ControlHeight) Height = UiTokens.ControlHeight;
+        _editor.Font = Font;
     }
 
     protected override void OnGotFocus(EventArgs e)
@@ -245,12 +299,12 @@ internal sealed class ModernNumericUpDown : UserControl
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
-        var border = ContainsFocus ? Color.FromArgb(59, 130, 246) : Color.FromArgb(148, 163, 184);
-        ModernUi.DrawBorder(e.Graphics, ClientRectangle, 9, Enabled ? border : Color.FromArgb(203, 213, 225), 1.2F);
+        var border = ContainsFocus ? UiTokens.Focus : UiTokens.Border;
+        ModernUi.DrawBorder(e.Graphics, ClientRectangle, UiTokens.RadiusMedium, Enabled ? border : UiTokens.Border, 1.2F);
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        using var divider = new Pen(Color.FromArgb(226, 232, 240));
+        using var divider = new Pen(AppTheme.Border);
         e.Graphics.DrawLine(divider, Width - 34, 5, Width - 34, Height - 5);
-        using var arrow = new Pen(Enabled ? Color.FromArgb(71, 85, 105) : Color.FromArgb(148, 163, 184), 1.5F)
+        using var arrow = new Pen(UiTokens.TextMuted, 1.5F)
         {
             StartCap = LineCap.Round,
             EndCap = LineCap.Round
@@ -324,9 +378,10 @@ internal sealed class ModernTextBox : UserControl
     public ModernTextBox()
     {
         AutoSize = false;
-        Height = 30;
-        MinimumSize = new Size(40, 30);
-        BackColor = Color.White;
+        Height = UiTokens.ControlHeight;
+        MinimumSize = new Size(40, UiTokens.ControlHeight);
+        BackColor = AppTheme.Field;
+        ForeColor = AppTheme.Text;
         TabStop = true;
         _editor = new TextBox
         {
@@ -340,7 +395,7 @@ internal sealed class ModernTextBox : UserControl
         _editor.Leave += (_, _) => Invalidate();
         Controls.Add(_editor);
         Click += (_, _) => _editor.Focus();
-        ModernUi.Round(this, 9);
+        ModernUi.Round(this, UiTokens.RadiusMedium);
     }
 
     public void Clear() => _editor.Clear();
@@ -368,6 +423,8 @@ internal sealed class ModernTextBox : UserControl
     {
         base.OnFontChanged(e);
         if (_editor is not null) _editor.Font = Font;
+        MinimumSize = new Size(MinimumSize.Width, UiTokens.ControlHeight);
+        if (!Multiline && Height < UiTokens.ControlHeight) Height = UiTokens.ControlHeight;
         PerformLayout();
     }
 
@@ -386,8 +443,8 @@ internal sealed class ModernTextBox : UserControl
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
-        ModernUi.DrawBorder(e.Graphics, ClientRectangle, 9,
-            ContainsFocus ? Color.FromArgb(59, 130, 246) : Color.FromArgb(148, 163, 184), 1.25F);
+        ModernUi.DrawBorder(e.Graphics, ClientRectangle, UiTokens.RadiusMedium,
+            ContainsFocus ? UiTokens.Focus : UiTokens.Border, 1.25F);
     }
 }
 
@@ -402,10 +459,12 @@ internal sealed class ModernComboBox : ComboBox
     public ModernComboBox()
     {
         DropDownStyle = ComboBoxStyle.DropDownList;
+        DrawMode = DrawMode.OwnerDrawFixed;
         FlatStyle = FlatStyle.Flat;
-        ItemHeight = 28;
+        ItemHeight = UiTokens.CompactHeight - 6;
         MaxDropDownItems = 8;
-        BackColor = Color.White;
+        BackColor = AppTheme.Field;
+        ForeColor = AppTheme.Text;
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
@@ -454,12 +513,12 @@ internal sealed class ModernComboBox : ComboBox
         {
             BorderStyle = BorderStyle.None,
             DrawMode = DrawMode.OwnerDrawFixed,
-            ItemHeight = 30,
+            ItemHeight = UiTokens.CompactHeight,
             IntegralHeight = false,
-            BackColor = Color.White,
-            ForeColor = Color.FromArgb(31, 41, 55),
+            BackColor = AppTheme.Surface,
+            ForeColor = AppTheme.Text,
             Font = Font,
-            Size = new Size(popupWidth - 12, visibleItems * 30)
+            Size = new Size(popupWidth - 12, visibleItems * UiTokens.CompactHeight)
         };
         foreach (var item in Items) list.Items.Add(item);
         list.SelectedIndex = SelectedIndex;
@@ -475,9 +534,9 @@ internal sealed class ModernComboBox : ComboBox
         _popup = new ToolStripDropDown
         {
             AutoSize = false,
-            BackColor = Color.White,
+            BackColor = AppTheme.Surface,
             Padding = new Padding(6),
-            Size = new Size(popupWidth, visibleItems * 30 + 12),
+            Size = new Size(popupWidth, visibleItems * UiTokens.CompactHeight + 12),
             Renderer = ModernMenuRenderer.Instance
         };
         _popup.Items.Add(host);
@@ -516,18 +575,18 @@ internal sealed class ModernComboBox : ComboBox
     private void DrawPopupItem(object? sender, DrawItemEventArgs e)
     {
         if (sender is not ListBox list || e.Index < 0 || e.Index >= list.Items.Count) return;
-        using (var background = new SolidBrush(Color.White)) e.Graphics.FillRectangle(background, e.Bounds);
+        using (var background = new SolidBrush(AppTheme.Surface)) e.Graphics.FillRectangle(background, e.Bounds);
         if ((e.State & DrawItemState.Selected) != 0)
         {
             var selectedBounds = Rectangle.Inflate(e.Bounds, -3, -2);
             using var selectedPath = ModernUi.RoundedPath(selectedBounds, 6);
-            using var selectedBrush = new SolidBrush(Color.FromArgb(239, 246, 255));
+            using var selectedBrush = new SolidBrush(AppTheme.Selected);
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
             e.Graphics.FillPath(selectedBrush, selectedPath);
         }
         TextRenderer.DrawText(e.Graphics, GetItemText(list.Items[e.Index]), Font,
             new Rectangle(e.Bounds.X + 10, e.Bounds.Y, e.Bounds.Width - 20, e.Bounds.Height),
-            Color.FromArgb(31, 41, 55), TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            AppTheme.Text, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
     }
 
     private void DrawClosedState()
@@ -536,17 +595,17 @@ internal sealed class ModernComboBox : ComboBox
         using var graphics = Graphics.FromHwnd(Handle);
         graphics.SmoothingMode = SmoothingMode.AntiAlias;
         var bounds = new Rectangle(0, 0, Width - 1, Height - 1);
-        using var path = ModernUi.RoundedPath(bounds, 8);
-        using var background = new SolidBrush(Enabled ? Color.White : Color.FromArgb(248, 250, 252));
-        using var border = new Pen(Focused || _popup is { Visible: true } ? Color.FromArgb(96, 165, 250) : Color.FromArgb(203, 213, 225));
+        using var path = ModernUi.RoundedPath(bounds, UiTokens.RadiusSmall);
+        using var background = new SolidBrush(Enabled ? AppTheme.Field : AppTheme.Disabled);
+        using var border = new Pen(Focused || _popup is { Visible: true } ? Color.FromArgb(96, 165, 250) : AppTheme.Border);
         graphics.FillPath(background, path);
         graphics.DrawPath(border, path);
 
         TextRenderer.DrawText(graphics, GetItemText(SelectedItem), Font,
             new Rectangle(12, 0, Math.Max(0, Width - 44), Height),
-            Enabled ? Color.FromArgb(31, 41, 55) : Color.FromArgb(148, 163, 184),
+            Enabled ? AppTheme.Text : AppTheme.Muted,
             TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
-        using var arrow = new Pen(Color.FromArgb(71, 85, 105), 1.7F) { StartCap = LineCap.Round, EndCap = LineCap.Round };
+        using var arrow = new Pen(AppTheme.Muted, 1.7F) { StartCap = LineCap.Round, EndCap = LineCap.Round };
         var centerX = Width - 20;
         var centerY = Height / 2;
         graphics.DrawLine(arrow, centerX - 4, centerY - 2, centerX, centerY + 2);
@@ -556,7 +615,38 @@ internal sealed class ModernComboBox : ComboBox
 
 internal sealed class ModernContextMenuStrip : ContextMenuStrip
 {
-    public ModernContextMenuStrip() => ModernUi.Style((ToolStripDropDown)this);
+    public ModernContextMenuStrip()
+    {
+        DropShadowEnabled = true;
+        ModernUi.Style((ToolStripDropDown)this);
+        MinimumSize = new Size(176, 0);
+    }
+
+    protected override void OnItemAdded(ToolStripItemEventArgs e)
+    {
+        base.OnItemAdded(e);
+        if (e.Item is not ToolStripMenuItem item) return;
+        item.AutoSize = false;
+        item.Height = UiTokens.MenuRowHeight;
+        item.Padding = Padding.Empty;
+        item.TextAlign = ContentAlignment.MiddleLeft;
+    }
+
+    protected override void OnOpening(System.ComponentModel.CancelEventArgs e)
+    {
+        base.OnOpening(e); // Opening 事件可能会动态重建菜单，之后再统一宽度。
+        if (e.Cancel) return;
+        var menuItems = Items.OfType<ToolStripMenuItem>().ToList();
+        var width = Math.Max(MinimumSize.Width - Padding.Horizontal, menuItems.Count == 0 ? 0 : menuItems.Max(item =>
+            TextRenderer.MeasureText(item.Text, item.Font).Width + 32 + (item.HasDropDownItems ? 16 : 0)));
+        foreach (ToolStripItem item in Items)
+        {
+            item.AutoSize = false;
+            item.Width = width;
+            item.Height = item is ToolStripSeparator ? 9 : item.Tag as string == "header" ? UiTokens.CompactHeight : UiTokens.MenuRowHeight;
+        }
+        PerformLayout();
+    }
 }
 
 internal sealed class ModernMenuRenderer : ToolStripProfessionalRenderer
@@ -570,22 +660,73 @@ internal sealed class ModernMenuRenderer : ToolStripProfessionalRenderer
 
     protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
     {
-        e.TextColor = e.Item.Enabled ? Color.FromArgb(31, 41, 55) : Color.FromArgb(148, 163, 184);
-        base.OnRenderItemText(e);
+        var color = (e.Item.Tag as string) switch
+        {
+            "danger" => UiTokens.Danger,
+            "header" => AppTheme.Muted,
+            _ => e.Item.Enabled ? AppTheme.Text : AppTheme.Muted
+        };
+        var rightSpace = e.Item is ToolStripMenuItem { HasDropDownItems: true } || e.Item.Tag as string == "checked" ? 30 : 14;
+        var bounds = new Rectangle(14, 0, Math.Max(0, e.Item.Width - 14 - rightSpace), e.Item.Height);
+        TextRenderer.DrawText(e.Graphics, e.Text, e.TextFont, bounds, color,
+            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+    }
+
+    protected override void OnRenderMenuItemBackground(ToolStripItemRenderEventArgs e)
+    {
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        if (e.Item.Selected && e.Item.Enabled)
+        {
+            using var path = ModernUi.RoundedPath(new Rectangle(2, 2, e.Item.Width - 4, e.Item.Height - 4), 6);
+            using var brush = new SolidBrush(AppTheme.IsDark ? Color.FromArgb(45, 45, 48) : AppTheme.Selected);
+            e.Graphics.FillPath(brush, path);
+        }
+        if (e.Item.Tag as string == "checked")
+        {
+            using var pen = new Pen(UiTokens.Primary, 1.8F) { StartCap = LineCap.Round, EndCap = LineCap.Round };
+            var x = e.Item.Width - 19;
+            var y = e.Item.Height / 2;
+            e.Graphics.DrawLine(pen, x - 3, y, x, y + 3);
+            e.Graphics.DrawLine(pen, x, y + 3, x + 5, y - 3);
+        }
+    }
+
+    protected override void OnRenderSeparator(ToolStripSeparatorRenderEventArgs e)
+    {
+        using var pen = new Pen(AppTheme.Border);
+        var y = e.Item.Height / 2;
+        e.Graphics.DrawLine(pen, 12, y, e.Item.Width - 12, y);
+    }
+
+    protected override void OnRenderArrow(ToolStripArrowRenderEventArgs e)
+    {
+        using var pen = new Pen(AppTheme.Muted, 1.5F) { StartCap = LineCap.Round, EndCap = LineCap.Round };
+        var x = e.ArrowRectangle.Left + 3;
+        var y = e.ArrowRectangle.Top + e.ArrowRectangle.Height / 2;
+        e.Graphics.DrawLine(pen, x, y - 3, x + 3, y);
+        e.Graphics.DrawLine(pen, x + 3, y, x, y + 3);
+    }
+
+    protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e)
+    {
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        using var path = ModernUi.RoundedPath(new Rectangle(0, 0, e.ToolStrip.Width - 1, e.ToolStrip.Height - 1), 9);
+        using var pen = new Pen(AppTheme.Border);
+        e.Graphics.DrawPath(pen, path);
     }
 }
 
 internal sealed class ModernMenuColors : ProfessionalColorTable
 {
-    public override Color ToolStripDropDownBackground => Color.White;
-    public override Color MenuBorder => Color.FromArgb(226, 232, 240);
+    public override Color ToolStripDropDownBackground => AppTheme.Surface;
+    public override Color MenuBorder => AppTheme.Border;
     public override Color MenuItemBorder => Color.FromArgb(219, 234, 254);
-    public override Color MenuItemSelected => Color.FromArgb(239, 246, 255);
+    public override Color MenuItemSelected => AppTheme.Selected;
     public override Color MenuItemSelectedGradientBegin => MenuItemSelected;
     public override Color MenuItemSelectedGradientEnd => MenuItemSelected;
-    public override Color ImageMarginGradientBegin => Color.White;
-    public override Color ImageMarginGradientMiddle => Color.White;
-    public override Color ImageMarginGradientEnd => Color.White;
-    public override Color SeparatorDark => Color.FromArgb(226, 232, 240);
-    public override Color SeparatorLight => Color.FromArgb(226, 232, 240);
+    public override Color ImageMarginGradientBegin => AppTheme.Surface;
+    public override Color ImageMarginGradientMiddle => AppTheme.Surface;
+    public override Color ImageMarginGradientEnd => AppTheme.Surface;
+    public override Color SeparatorDark => AppTheme.Border;
+    public override Color SeparatorLight => AppTheme.Border;
 }

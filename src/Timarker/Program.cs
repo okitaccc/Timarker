@@ -1,13 +1,17 @@
 ﻿using Timarker.Services;
 using Timarker.Models;
+using System.Text.Json;
 
 namespace Timarker;
 
 internal static class Program
 {
+    private const string ActivationEventName = "Timarker.Activate.2026";
+
     [STAThread]
     private static void Main()
     {
+        CrashReporter.Initialize();
 #if DEBUG
         ModelSelfCheck();
         if (Environment.GetEnvironmentVariable("TIMARKER_SELF_CHECK") == "1") return;
@@ -16,23 +20,34 @@ internal static class Program
         using var legacySingleInstance = new Mutex(true, "Timeline.SingleInstance.2026", out var legacyCreatedNew);
         if (!createdNew || !legacyCreatedNew)
         {
-            var settings = new SettingsStore().Load();
-            L.Use(settings);
-            MessageBox.Show(
-                L.IsEnglish ? "Timarker is already running. Find it in the system tray." : "事刻已经在运行了，可以在右下角系统托盘中找到它。",
-                L.IsEnglish ? L.BrandEn : L.BrandZh,
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+            if (EventWaitHandle.TryOpenExisting(ActivationEventName, out var existingActivationEvent))
+            {
+                using (existingActivationEvent) existingActivationEvent.Set();
+            }
             return;
         }
 
         ApplicationConfiguration.Initialize();
+        AppTheme.Use(new SettingsStore().Load());
         var store = new EventStore(AppPaths.DataDirectory);
+        using var activationEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ActivationEventName);
         MainForm mainForm;
         do
         {
+            AppTheme.Use(new SettingsStore().Load());
             mainForm = new MainForm(store);
+            var activationRegistration = ThreadPool.RegisterWaitForSingleObject(
+                activationEvent,
+                (_, _) =>
+                {
+                    if (!mainForm.IsDisposed && mainForm.IsHandleCreated)
+                        mainForm.BeginInvoke(mainForm.RestoreFromTray);
+                },
+                null,
+                Timeout.Infinite,
+                false);
             Application.Run(mainForm);
+            activationRegistration.Unregister(null);
         } while (mainForm.RestartRequested);
     }
 
@@ -124,23 +139,18 @@ internal static class Program
         monthly.Complete(new DateTime(2026, 4, 13, 10, 0, 0));
         System.Diagnostics.Debug.Assert(monthly.NextDueAt(new DateTime(2026, 4, 13, 10, 0, 0)) is null);
 
-        var project = new EventItem
-        {
-            IsProject = true,
-            Title = "测试项目",
-            DeadlineAt = new DateTime(2026, 8, 1, 18, 0, 0)
-        };
-        var projectStep = new EventItem
-        {
-            ProjectId = project.Id,
-            ProjectOrder = 1,
-            StartAt = new DateTime(2026, 7, 20, 9, 0, 0)
-        };
-        System.Diagnostics.Debug.Assert(project.NextDueAt(new DateTime(2026, 7, 20)) is null);
+        var projectStep = new EventItem { StartAt = new DateTime(2026, 7, 20, 9, 0, 0) };
+        var project = new Project { Name = "测试项目", Steps = [new ProjectStep { EventId = projectStep.Id, Order = 1 }] };
+        System.Diagnostics.Debug.Assert(project.Steps.Single().EventId == projectStep.Id);
         projectStep.ShiftSchedule(1440);
         System.Diagnostics.Debug.Assert(projectStep.StartAt == new DateTime(2026, 7, 21, 9, 0, 0));
         projectStep.Complete();
         System.Diagnostics.Debug.Assert(projectStep.Status is EventStatus.Done);
+
+        var folder = new Folder { Name = "测试收藏夹" };
+        folder.Add(projectStep.Id);
+        folder.Add(projectStep.Id);
+        System.Diagnostics.Debug.Assert(folder.EventIds.Count == 1 && folder.Contains(projectStep.Id));
 
         var reminder = new EventItem
         {
@@ -155,5 +165,43 @@ internal static class Program
         System.Diagnostics.Debug.Assert(reminder.IsDue(firstReminderAt.AddMinutes(10)));
         reminder.MarkReminded(firstReminderAt.AddMinutes(10));
         System.Diagnostics.Debug.Assert(!reminder.IsDue(firstReminderAt.AddMinutes(20)));
+
+        var migrationDirectory = Path.Combine(Path.GetTempPath(), $"timarker-migration-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(migrationDirectory);
+        try
+        {
+            var legacyFolder = new EventItem { Title = "旧收藏夹", IsGroup = true };
+            var legacyProject = new EventItem { Title = "旧项目", IsProject = true };
+            var legacyEvent = new EventItem { Title = "旧步骤", ProjectId = legacyProject.Id, ProjectOrder = 1, FolderIds = [legacyFolder.Id] };
+            File.WriteAllText(Path.Combine(migrationDirectory, "events.json"), JsonSerializer.Serialize(new[] { legacyFolder, legacyProject, legacyEvent }));
+            var migratedStore = new EventStore(migrationDirectory);
+            var migratedEvents = migratedStore.Load();
+            System.Diagnostics.Debug.Assert(migratedEvents.Count == 1 && migratedEvents[0].Id == legacyEvent.Id);
+            System.Diagnostics.Debug.Assert(migratedStore.Folders.Single().Contains(legacyEvent.Id));
+            System.Diagnostics.Debug.Assert(migratedStore.Projects.Single().Steps.Single().EventId == legacyEvent.Id);
+        }
+        finally
+        {
+            Directory.Delete(migrationDirectory, true);
+        }
+
+        var activityDirectory = Path.Combine(Path.GetTempPath(), $"timarker-activity-recovery-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(activityDirectory);
+        try
+        {
+            var activityStore = new ActivityStore(activityDirectory);
+            activityStore.Sessions.Add(new AppActivitySession { StartedAt = DateTime.Now.AddMinutes(-5), EndedAt = DateTime.Now, ProcessName = "test", AppName = "Test" });
+            activityStore.Save(30);
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            File.WriteAllText(Path.Combine(activityDirectory, "activity.db"), "damaged");
+            var recoveredActivityStore = new ActivityStore(activityDirectory);
+            System.Diagnostics.Debug.Assert(recoveredActivityStore.RecoveryMessage is not null);
+            System.Diagnostics.Debug.Assert(recoveredActivityStore.Sessions.Count == 1);
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            Directory.Delete(activityDirectory, true);
+        }
     }
 }

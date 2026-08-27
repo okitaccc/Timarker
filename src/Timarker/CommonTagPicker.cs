@@ -15,7 +15,7 @@ public sealed class CommonTagPicker : UserControl
         Height = 152;
         MinimumSize = new Size(0, 144);
         Padding = Padding.Empty;
-        BackColor = Color.White;
+        BackColor = AppTheme.Surface;
         Controls.Add(_panel);
 
         foreach (var tag in new[]
@@ -33,8 +33,8 @@ public sealed class CommonTagPicker : UserControl
                 Width = TextRenderer.MeasureText(tag, Font).Width + 28,
                 Height = 32,
                 FlatStyle = FlatStyle.Flat,
-                BackColor = Color.FromArgb(248, 250, 252),
-                ForeColor = Color.FromArgb(71, 85, 105),
+                BackColor = AppTheme.SurfaceAlt,
+                ForeColor = AppTheme.Muted,
                 Margin = new Padding(0, 0, 8, 8),
                 Padding = Padding.Empty,
                 TextAlign = ContentAlignment.MiddleCenter,
@@ -76,8 +76,8 @@ public sealed class CommonTagPicker : UserControl
     {
         var tag = chip.Tag?.ToString() ?? chip.Text;
         chip.Text = chip.Checked ? $"✓ {tag}" : tag;
-        chip.BackColor = chip.Checked ? Color.FromArgb(219, 234, 254) : Color.FromArgb(248, 250, 252);
-        chip.ForeColor = chip.Checked ? Color.FromArgb(29, 78, 216) : Color.FromArgb(71, 85, 105);
-        chip.FlatAppearance.BorderColor = chip.Checked ? Color.FromArgb(37, 99, 235) : Color.FromArgb(203, 213, 225);
+        chip.BackColor = chip.Checked ? AppTheme.Selected : AppTheme.SurfaceAlt;
+        chip.ForeColor = chip.Checked ? Color.FromArgb(96, 165, 250) : AppTheme.Muted;
+        chip.FlatAppearance.BorderColor = chip.Checked ? UiTokens.Primary : UiTokens.Border;
     }
 }

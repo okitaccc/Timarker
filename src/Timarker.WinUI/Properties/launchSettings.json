@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "Timarker.WinUI (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "Timarker.WinUI (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

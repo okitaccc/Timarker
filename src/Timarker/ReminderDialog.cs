@@ -31,8 +31,8 @@ public sealed class ReminderDialog : Form
         Height = 280;
         MinimumSize = new Size(380, 260);
         StartPosition = FormStartPosition.CenterScreen;
-        Font = new Font("Microsoft YaHei UI", 9F);
-        BackColor = Color.FromArgb(246, 247, 251);
+        Font = UiTokens.Font();
+        BackColor = UiTokens.AppBackground;
         TopMost = true;
         _minutesBox.Value = Math.Min(_minutesBox.Maximum, Math.Max(_minutesBox.Minimum, defaultMinutes));
         BuildUi(item);
@@ -59,8 +59,8 @@ public sealed class ReminderDialog : Form
         {
             Text = "现在需要处理这个事项吗？",
             Dock = DockStyle.Fill,
-            Font = new Font(Font, FontStyle.Bold),
-            ForeColor = Color.FromArgb(31, 41, 55)
+            Font = UiTokens.Font(UiTokens.TextEmphasis, FontStyle.Bold),
+            ForeColor = UiTokens.Text
         });
 
         root.Controls.Add(new Label
@@ -68,7 +68,7 @@ public sealed class ReminderDialog : Form
             Text = $"{item.Title}\r\n{item.TypeText} · {dueText}\r\n{item.Notes}",
             Dock = DockStyle.Fill,
             AutoEllipsis = true,
-            ForeColor = Color.FromArgb(31, 41, 55)
+            ForeColor = UiTokens.Text
         });
 
         var minutes = new TableLayoutPanel
@@ -87,7 +87,7 @@ public sealed class ReminderDialog : Form
             Text = "稍后/延期",
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft,
-            ForeColor = Color.FromArgb(107, 114, 128)
+            ForeColor = UiTokens.TextMuted
         }, 0, 0);
         _minutesBox.Anchor = AnchorStyles.Left;
         _minutesBox.Margin = Padding.Empty;
@@ -98,7 +98,7 @@ public sealed class ReminderDialog : Form
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft,
             Padding = new Padding(6, 0, 0, 0),
-            ForeColor = Color.FromArgb(107, 114, 128)
+            ForeColor = UiTokens.TextMuted
         }, 2, 0);
         root.Controls.Add(minutes);
 
@@ -114,16 +114,18 @@ public sealed class ReminderDialog : Form
 
     private Button Button(string text, ReminderDialogAction action, bool primary)
     {
-        var button = new Button
+        var button = new ModernButton
         {
             Text = text,
             Width = 86,
-            Height = 34,
+            Height = UiTokens.ControlHeight,
             FlatStyle = FlatStyle.Flat,
-            BackColor = primary ? Color.FromArgb(37, 99, 235) : Color.White,
-            ForeColor = primary ? Color.White : Color.FromArgb(31, 41, 55),
-            Margin = new Padding(6, 6, 0, 0)
+            BackColor = primary ? UiTokens.Primary : UiTokens.Surface,
+            ForeColor = primary ? Color.White : UiTokens.Text,
+            Margin = new Padding(6, 6, 0, 0),
+            Cursor = Cursors.Hand
         };
+        button.FlatAppearance.BorderColor = primary ? UiTokens.Primary : UiTokens.Border;
         button.Click += (_, _) =>
         {
             SelectedAction = action;

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page x:Class="Timarker_WinUI.Pages.ProjectsPage" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid Padding="28,20,28,24" RowSpacing="18"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <Grid><StackPanel><TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="项目"/><TextBlock Margin="0,4,0,0" Opacity="0.62" Text="把一件大事拆成可以逐步完成的行动。"/></StackPanel><Button HorizontalAlignment="Right" VerticalAlignment="Center" Style="{StaticResource AccentButtonStyle}" Content="新建项目" Click="Add_Click"/></Grid>
+        <Grid Grid.Row="1" ColumnSpacing="18"><Grid.ColumnDefinitions><ColumnDefinition Width="300"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <ListView x:Name="ProjectList" SelectionChanged="Project_Changed"><ListView.ItemTemplate><DataTemplate><Border Padding="15" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"><TextBlock Text="{Binding Name}" FontWeight="SemiBold"/></Border></DataTemplate></ListView.ItemTemplate></ListView>
+            <Border Grid.Column="1" Padding="22" CornerRadius="16" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                <Grid><StackPanel x:Name="EmptyPanel" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8"><FontIcon Glyph="&#xE8F1;" FontSize="34" Opacity="0.5"/><TextBlock Text="选择一个项目查看步骤" Opacity="0.7"/></StackPanel>
+                    <Grid x:Name="DetailPanel" Visibility="Collapsed" RowSpacing="14"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                        <TextBox x:Name="ProjectNameBox" Header="项目名称"/><TextBox x:Name="ProjectNotesBox" Grid.Row="1" Header="说明" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="80"/>
+                        <ListView x:Name="StepList" Grid.Row="2" Margin="0,8,0,8"><ListView.ItemTemplate><DataTemplate><Border Margin="0,0,0,8" Padding="12" CornerRadius="10" Background="{ThemeResource SubtleFillColorSecondaryBrush}"><TextBlock Text="{Binding}"/></Border></DataTemplate></ListView.ItemTemplate></ListView>
+                        <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="8"><Button Content="添加步骤" Click="AddStep_Click"/><Button Style="{StaticResource AccentButtonStyle}" Content="保存更改" Click="Save_Click"/><Button Content="删除项目" Click="Delete_Click"/></StackPanel>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</Page>

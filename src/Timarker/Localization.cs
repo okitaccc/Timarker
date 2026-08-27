@@ -39,11 +39,24 @@ internal static class L
         ["新建事务"] = "New event",
         ["当前事务"] = "Current events",
         ["推荐优先"] = "Recommended",
+        ["今日"] = "Today",
+        ["下一步"] = "Next action",
+        ["今日清单"] = "Today list",
+        ["复盘"] = "Review",
+        ["事项历程"] = "Event history",
+        ["时间统计"] = "Time statistics",
+        ["计划"] = "PLAN",
+        ["执行"] = "DO",
+        ["回顾"] = "REVIEW",
+        ["工具"] = "TOOLS",
         ["日历视图"] = "Calendar",
         ["收藏夹"] = "Collections",
         ["项目"] = "Projects",
         ["人物"] = "People",
         ["记录"] = "History",
+        ["事件记录"] = "Event history",
+        ["统计"] = "Statistics",
+        ["时间追踪"] = "Time tracking",
         ["便签"] = "Notes",
         ["新建便签"] = "New note",
         ["新便签"] = "New note",
@@ -141,6 +154,11 @@ internal static class L
         ["例如：家人、伴侣、工作"] = "e.g. Family, partner, work",
         ["输入词条后按 Enter"] = "Type a tag and press Enter",
         ["普通事项"] = "Standard",
+        ["一次性事项"] = "One-time",
+        ["当天内完成"] = "Anytime today",
+        ["当天完成"] = "Today",
+        ["需要提醒"] = "Remind me",
+        ["启动 Timarker 时显示今日清单"] = "Show Today list when Timarker starts",
         ["周期事项"] = "Recurring",
         ["生日"] = "Birthday",
         ["纪念日"] = "Anniversary",
@@ -343,12 +361,18 @@ internal static class L
 
     public static void Apply(Control root)
     {
+        ApplyCore(root);
+        AppTheme.Apply(root);
+    }
+
+    private static void ApplyCore(Control root)
+    {
         root.Text = T(root.Text);
         if (root is TextBox textBox) textBox.PlaceholderText = T(textBox.PlaceholderText);
         if (root is ModernTextBox modernTextBox) modernTextBox.PlaceholderText = T(modernTextBox.PlaceholderText);
         if (root.ContextMenuStrip is not null) Apply(root.ContextMenuStrip);
         ModernUi.Style(root);
-        foreach (Control child in root.Controls) Apply(child);
+        foreach (Control child in root.Controls) ApplyCore(child);
     }
 
     public static void Apply(ContextMenuStrip menu)

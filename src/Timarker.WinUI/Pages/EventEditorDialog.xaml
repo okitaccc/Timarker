@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ContentDialog
+    x:Class="Timarker_WinUI.Pages.EventEditorDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="新建事项"
+    PrimaryButtonText="保存"
+    CloseButtonText="取消"
+    DefaultButton="Primary"
+    PrimaryButtonClick="Save_Click">
+    <ScrollViewer MaxHeight="620" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Width="520" Spacing="16">
+            <TextBox x:Name="TitleBox" Header="事项名称" PlaceholderText="要记住什么？" />
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                <ComboBox x:Name="TypeBox" Header="事项用途" SelectedIndex="0" HorizontalAlignment="Stretch" SelectionChanged="Type_Changed">
+                    <ComboBoxItem Content="普通事项" Tag="StartAt"/><ComboBoxItem Content="截止事项" Tag="Deadline"/><ComboBoxItem Content="周期事项" Tag="Recurring"/><ComboBoxItem Content="生日" Tag="Birthday"/><ComboBoxItem Content="纪念日" Tag="Anniversary"/>
+                </ComboBox>
+                <ComboBox x:Name="PriorityBox" Grid.Column="1" Header="优先级" SelectedIndex="2" HorizontalAlignment="Stretch">
+                    <ComboBoxItem Content="无" Tag="None"/><ComboBoxItem Content="低" Tag="Low"/><ComboBoxItem Content="普通" Tag="Normal"/><ComboBoxItem Content="高" Tag="High"/>
+                </ComboBox>
+            </Grid>
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                <DatePicker x:Name="DateBox" Header="日期" HorizontalAlignment="Stretch" />
+                <TimePicker x:Name="TimeBox" Grid.Column="1" Header="时间" ClockIdentifier="24HourClock" HorizontalAlignment="Stretch" />
+            </Grid>
+            <StackPanel x:Name="RepeatPanel" Visibility="Collapsed" Spacing="10">
+                <TextBlock FontWeight="SemiBold" Text="重复规则" />
+                <Grid ColumnSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <NumberBox x:Name="RepeatEveryBox" Header="每隔" Value="1" Minimum="1" Maximum="999" SpinButtonPlacementMode="Compact" />
+                    <ComboBox x:Name="RepeatUnitBox" Grid.Column="1" Header="单位" SelectedIndex="0" HorizontalAlignment="Stretch"><ComboBoxItem Content="天" Tag="Day"/><ComboBoxItem Content="周" Tag="Week"/><ComboBoxItem Content="月" Tag="Month"/><ComboBoxItem Content="年" Tag="Year"/></ComboBox>
+                </Grid>
+            </StackPanel>
+            <TextBox x:Name="TagsBox" Header="词条" PlaceholderText="工作, 学习" />
+            <TextBox x:Name="NotesBox" Header="备注" PlaceholderText="补充说明（可选）" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="96" />
+            <Grid ColumnSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                <NumberBox x:Name="LeadBox" Header="提前提醒（分钟）" Minimum="0" Maximum="525600" Value="0" SpinButtonPlacementMode="Compact" />
+                <NumberBox x:Name="RepeatReminderBox" Grid.Column="1" Header="再次提醒（分钟）" Minimum="0" Maximum="10080" Value="10" SpinButtonPlacementMode="Compact" />
+            </Grid>
+            <InfoBar x:Name="ErrorBar" Severity="Error" IsOpen="False" IsClosable="False" />
+        </StackPanel>
+    </ScrollViewer>
+</ContentDialog>

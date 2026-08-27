@@ -4,10 +4,10 @@ namespace Timarker;
 
 public sealed class PeopleView : UserControl
 {
-    private static readonly Color AppBack = Color.FromArgb(246, 247, 251);
-    private static readonly Color TextMain = Color.FromArgb(31, 41, 55);
-    private static readonly Color TextMuted = Color.FromArgb(100, 116, 139);
-    private static readonly Color Accent = Color.FromArgb(37, 99, 235);
+    private static Color AppBack => AppTheme.AppBack;
+    private static Color TextMain => AppTheme.Text;
+    private static Color TextMuted => AppTheme.Muted;
+    private static Color Accent => UiTokens.Primary;
     private readonly List<PersonProfile> _people;
     private readonly List<EventItem> _events;
     private readonly List<ActivityRecord> _records;
@@ -15,7 +15,7 @@ public sealed class PeopleView : UserControl
     private readonly Action _save;
     private readonly ListBox _personList = new() { Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, ItemHeight = 72, DrawMode = DrawMode.OwnerDrawFixed };
     private readonly ListBox _eventList = new() { Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, DrawMode = DrawMode.OwnerDrawFixed, ItemHeight = EventCardRenderer.ItemHeight };
-    private readonly Label _name = new() { AutoSize = true, Font = new Font("Microsoft YaHei UI", 18F, FontStyle.Bold), ForeColor = TextMain };
+    private readonly Label _name = new() { AutoSize = true, Font = UiTokens.Font(UiTokens.TextPageTitle, FontStyle.Bold), ForeColor = TextMain };
     private readonly Label _meta = new() { AutoSize = true, ForeColor = TextMuted };
     private readonly Label _empty = new() { Text = "选择一个人物，查看与 TA 有关的生日、纪念日和事项。", AutoSize = true, ForeColor = TextMuted };
 
@@ -28,7 +28,7 @@ public sealed class PeopleView : UserControl
         _save = save;
         Dock = DockStyle.Fill;
         BackColor = AppBack;
-        Font = new Font("Microsoft YaHei UI", 9F);
+        Font = UiTokens.Font();
         BuildUi();
         RefreshView();
     }
@@ -107,7 +107,7 @@ public sealed class PeopleView : UserControl
         _empty.Visible = person is null;
         _eventList.Items.Clear();
         if (person is null) return;
-        foreach (var item in _events.Where(x => !x.IsGroup && !x.IsProject && x.PersonIds.Contains(person.Id)).OrderBy(x => x.NextDueAt(DateTime.Now) ?? DateTime.MaxValue))
+        foreach (var item in _events.Where(x => x.PersonIds.Contains(person.Id)).OrderBy(x => x.NextDueAt(DateTime.Now) ?? DateTime.MaxValue))
             _eventList.Items.Add(item);
     }
 
@@ -145,7 +145,7 @@ public sealed class PeopleView : UserControl
     private void LinkEvents()
     {
         if (_personList.SelectedItem is not PersonProfile person) return;
-        var candidates = _events.Where(x => !x.IsGroup && !x.IsProject).OrderBy(x => x.Title).ToList();
+        var candidates = _events.OrderBy(x => x.Title).ToList();
         using var dialog = new EventLinkDialog(person, candidates);
         if (dialog.ShowDialog(FindForm()) != DialogResult.OK) return;
         foreach (var item in candidates)
@@ -163,7 +163,7 @@ public sealed class PeopleView : UserControl
     private void DrawEvent(object? sender, DrawItemEventArgs e)
     {
         if (e.Index >= 0 && _eventList.Items[e.Index] is EventItem item)
-            EventCardRenderer.Draw(e.Graphics, e.Bounds, item, Font, (e.State & DrawItemState.Selected) != 0, Color.White, false);
+            EventCardRenderer.Draw(e.Graphics, e.Bounds, item, Font, (e.State & DrawItemState.Selected) != 0, AppTheme.Surface, false);
     }
 
     private void DrawPerson(object? sender, DrawItemEventArgs e)
@@ -171,27 +171,32 @@ public sealed class PeopleView : UserControl
         if (e.Index < 0 || _personList.Items[e.Index] is not PersonProfile person) return;
         var selected = (e.State & DrawItemState.Selected) != 0;
         var card = Rectangle.Inflate(e.Bounds, -2, -4);
-        using var background = new SolidBrush(selected ? Color.FromArgb(239, 246, 255) : Color.FromArgb(248, 250, 252));
-        using var border = new Pen(selected ? Color.FromArgb(147, 197, 253) : Color.FromArgb(226, 232, 240));
-        e.Graphics.FillRectangle(background, card); e.Graphics.DrawRectangle(border, card);
+        using var background = new SolidBrush(selected ? AppTheme.Selected : AppTheme.SurfaceAlt);
+        using var border = new Pen(selected ? Color.FromArgb(147, 197, 253) : AppTheme.Border);
+        e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        using (var path = ModernUi.RoundedPath(card, 10))
+        {
+            e.Graphics.FillPath(background, path);
+            e.Graphics.DrawPath(border, path);
+        }
         using var nameFont = new Font(Font.FontFamily, 10F, FontStyle.Bold);
         TextRenderer.DrawText(e.Graphics, person.Name, nameFont, new Rectangle(card.Left + 12, card.Top + 9, card.Width - 24, 25), TextMain, TextFormatFlags.EndEllipsis | TextFormatFlags.VerticalCenter);
         TextRenderer.DrawText(e.Graphics, person.Relationship.DefaultIfBlank("未填写关系"), Font, new Rectangle(card.Left + 12, card.Top + 37, card.Width - 24, 23), TextMuted, TextFormatFlags.EndEllipsis | TextFormatFlags.VerticalCenter);
     }
 
-    private static Panel Card() => new() { Dock = DockStyle.Fill, BackColor = Color.White, Margin = new Padding(7) };
+    private static Panel Card() => new() { Dock = DockStyle.Fill, BackColor = AppTheme.Surface, Margin = new Padding(7) };
     private static Control Header(string title, string subtitle)
     {
         var panel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2 };
         panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
-        panel.Controls.Add(new Label { Text = title, Dock = DockStyle.Fill, Font = new Font("Microsoft YaHei UI", 16F, FontStyle.Bold), ForeColor = TextMain });
+        panel.Controls.Add(new Label { Text = title, Dock = DockStyle.Fill, Font = UiTokens.Font(UiTokens.TextPageTitle, FontStyle.Bold), ForeColor = TextMain });
         panel.Controls.Add(new Label { Text = subtitle, Dock = DockStyle.Fill, ForeColor = TextMuted }, 0, 1);
         return panel;
     }
-    private static Button Button(string text, bool primary) => new()
+    private static Button Button(string text, bool primary) => new ModernButton
     {
         Text = text, Height = 40, Width = primary ? 126 : 104, FlatStyle = FlatStyle.Flat,
-        BackColor = primary ? Accent : Color.White, ForeColor = primary ? Color.White : TextMain,
+        BackColor = primary ? Accent : UiTokens.Surface, ForeColor = primary ? Color.White : TextMain,
         Margin = new Padding(0, 5, 8, 5)
     };
 }
@@ -207,12 +212,12 @@ internal sealed class PersonDialog : Form
     public PersonDialog(PersonProfile person, string title)
     {
         _person = person; Text = title; Width = 500; Height = 430; FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false; MinimizeBox = false; StartPosition = FormStartPosition.CenterParent; Font = new Font("Microsoft YaHei UI", 9F);
-        var form = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(24), RowCount = 9, ColumnCount = 1, BackColor = Color.White };
+        MaximizeBox = false; MinimizeBox = false; StartPosition = FormStartPosition.CenterParent; Font = UiTokens.Font();
+        var form = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(24), RowCount = 9, ColumnCount = 1, BackColor = UiTokens.Surface };
         Add(form, "姓名", _name); Add(form, "关系", _relationship); Add(form, "词条", _tags); Add(form, "备注", _notes);
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight };
-        var save = new Button { Text = "保存", Width = 100, Height = 38, BackColor = Color.FromArgb(37, 99, 235), ForeColor = Color.White, FlatStyle = FlatStyle.Flat };
-        var cancel = new Button { Text = "取消", Width = 88, Height = 38 };
+        var save = new ModernButton { Text = "保存", Width = 100, Height = UiTokens.ControlHeight, BackColor = UiTokens.Primary, ForeColor = Color.White };
+        var cancel = new ModernButton { Text = "取消", Width = 88, Height = 38 };
         save.Click += (_, _) => Save(); cancel.Click += (_, _) => DialogResult = DialogResult.Cancel;
         buttons.Controls.Add(save); buttons.Controls.Add(cancel); form.Controls.Add(buttons);
         _name.Text = person.Name; _relationship.Text = person.Relationship; _notes.Text = person.Notes; _tags.Text = person.Tags;
@@ -243,13 +248,13 @@ internal sealed class EventLinkDialog : Form
     public EventLinkDialog(PersonProfile person, IReadOnlyList<EventItem> events)
     {
         Text = $"关联到 {person.Name}"; Width = 520; Height = 560; StartPosition = FormStartPosition.CenterParent;
-        Font = new Font("Microsoft YaHei UI", 9F); BackColor = Color.White; MinimumSize = new Size(440, 460);
-        var shell = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, Padding = new Padding(22), BackColor = Color.White };
+        Font = UiTokens.Font(); BackColor = UiTokens.Surface; MinimumSize = new Size(440, 460);
+        var shell = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, Padding = new Padding(22), BackColor = UiTokens.Surface };
         shell.RowStyles.Add(new RowStyle(SizeType.Absolute, 66)); shell.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); shell.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
-        shell.Controls.Add(new Label { Text = "选择与这个人物有关的事项", Dock = DockStyle.Fill, Font = new Font(Font.FontFamily, 14F, FontStyle.Bold), ForeColor = Color.FromArgb(31, 41, 55) });
+        shell.Controls.Add(new Label { Text = "选择与这个人物有关的事项", Dock = DockStyle.Fill, Font = UiTokens.Font(UiTokens.TextSection, FontStyle.Bold), ForeColor = UiTokens.Text });
         foreach (var item in events) _list.Items.Add(item, item.PersonIds.Contains(person.Id));
         shell.Controls.Add(_list, 0, 1);
-        var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill }; var save = new Button { Text = "保存关联", Width = 108, Height = 38, BackColor = Color.FromArgb(37, 99, 235), ForeColor = Color.White, FlatStyle = FlatStyle.Flat }; var cancel = new Button { Text = "取消", Width = 88, Height = 38 };
+        var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill }; var save = new ModernButton { Text = "保存关联", Width = 108, Height = UiTokens.ControlHeight, BackColor = UiTokens.Primary, ForeColor = Color.White }; var cancel = new ModernButton { Text = "取消", Width = 88, Height = UiTokens.ControlHeight };
         save.Click += (_, _) => { foreach (var value in _list.CheckedItems.OfType<EventItem>()) SelectedIds.Add(value.Id); DialogResult = DialogResult.OK; };
         cancel.Click += (_, _) => DialogResult = DialogResult.Cancel; buttons.Controls.Add(save); buttons.Controls.Add(cancel); shell.Controls.Add(buttons, 0, 2);
         Controls.Add(shell); AcceptButton = save; CancelButton = cancel;

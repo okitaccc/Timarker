@@ -2,10 +2,10 @@
 
 public sealed class PomodoroForm : Form
 {
-    private static readonly Color Back = Color.FromArgb(248, 250, 252);
-    private static readonly Color TextMain = Color.FromArgb(31, 41, 55);
-    private static readonly Color TextMuted = Color.FromArgb(100, 116, 139);
-    private static readonly Color Accent = Color.FromArgb(37, 99, 235);
+    private static Color Back => AppTheme.SurfaceAlt;
+    private static Color TextMain => AppTheme.Text;
+    private static Color TextMuted => AppTheme.Muted;
+    private static Color Accent => UiTokens.Primary;
 
     private readonly NotifyIcon _notifyIcon;
     private readonly Label _mode = new();

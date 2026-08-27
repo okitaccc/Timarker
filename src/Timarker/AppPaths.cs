@@ -2,6 +2,16 @@ namespace Timarker;
 
 internal static class AppPaths
 {
+    public static string PluginsDirectory
+    {
+        get
+        {
+            var directory = Path.Combine(DataDirectory, "Plugins");
+            Directory.CreateDirectory(directory);
+            return directory;
+        }
+    }
+
     public static string DataDirectory
     {
         get

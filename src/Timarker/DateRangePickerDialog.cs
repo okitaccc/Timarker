@@ -4,7 +4,7 @@ namespace Timarker;
 
 public sealed class DateRangePickerDialog : Form
 {
-    private static readonly Color Accent = Color.FromArgb(37, 99, 235);
+    private static Color Accent => UiTokens.Primary;
     private readonly MonthPane _left;
     private readonly MonthPane _right;
     private readonly Label _startValue = ValueLabel();
@@ -51,10 +51,10 @@ public sealed class DateRangePickerDialog : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
-        Font = new Font("Microsoft YaHei UI", 9F);
-        BackColor = Color.White;
+        Font = UiTokens.Font();
+        BackColor = AppTheme.Surface;
 
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(30, 24, 30, 22), ColumnCount = 2, RowCount = 4, BackColor = Color.White };
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(30, 24, 30, 22), ColumnCount = 2, RowCount = 4, BackColor = AppTheme.Surface };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
@@ -88,7 +88,7 @@ public sealed class DateRangePickerDialog : Form
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 102));
         var modes = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = Padding.Empty };
-        modes.Controls.Add(new Label { Text = "选择方式", AutoSize = true, ForeColor = Color.FromArgb(71, 85, 105), Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold), Margin = new Padding(0, 8, 14, 0) });
+        modes.Controls.Add(new Label { Text = "选择方式", AutoSize = true, ForeColor = UiTokens.TextMuted, Font = UiTokens.Font(UiTokens.TextBody, FontStyle.Bold), Margin = new Padding(0, 8, 14, 0) });
         modes.Controls.Add(_startMode);
         modes.Controls.Add(_endMode);
         modes.Controls.Add(_rangeMode);
@@ -109,7 +109,7 @@ public sealed class DateRangePickerDialog : Form
 
     private Control RangeHeader()
     {
-        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, BackColor = Color.FromArgb(248, 250, 252), Padding = new Padding(14, 8, 14, 8) };
+        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, BackColor = AppTheme.SurfaceAlt, Padding = new Padding(14, 8, 14, 8) };
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 50));
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
@@ -125,12 +125,12 @@ public sealed class DateRangePickerDialog : Form
         panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
         panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
         panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        panel.Controls.Add(new Label { Text = caption, Dock = DockStyle.Fill, ForeColor = Color.FromArgb(100, 116, 139), Font = new Font("Microsoft YaHei UI", 8F) });
+        panel.Controls.Add(new Label { Text = caption, Dock = DockStyle.Fill, ForeColor = UiTokens.TextMuted, Font = UiTokens.Font(UiTokens.TextSmall) });
         panel.Controls.Add(value);
         var time = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Padding = new Padding(0, 3, 0, 0) };
-        time.Controls.Add(new Label { Text = "时间", AutoSize = true, ForeColor = Color.FromArgb(100, 116, 139), Margin = new Padding(0, 6, 8, 0) });
+        time.Controls.Add(new Label { Text = "时间", AutoSize = true, ForeColor = UiTokens.TextMuted, Margin = new Padding(0, 6, 8, 0) });
         time.Controls.Add(hour);
-        time.Controls.Add(new Label { Text = ":", AutoSize = true, ForeColor = Color.FromArgb(100, 116, 139), Font = new Font("Microsoft YaHei UI", 11F, FontStyle.Bold), Margin = new Padding(5, 4, 5, 0) });
+        time.Controls.Add(new Label { Text = ":", AutoSize = true, ForeColor = UiTokens.TextMuted, Font = UiTokens.Font(UiTokens.TextSection, FontStyle.Bold), Margin = new Padding(5, 4, 5, 0) });
         time.Controls.Add(minute);
         panel.Controls.Add(time);
         return panel;
@@ -139,11 +139,11 @@ public sealed class DateRangePickerDialog : Form
     private Control Footer()
     {
         var panel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, 10, 0, 0) };
-        var ok = new Button { Text = "确定", DialogResult = DialogResult.OK, Width = 96, Height = 36, BackColor = Accent, ForeColor = Color.White, FlatStyle = FlatStyle.Flat };
+        var ok = new ModernButton { Text = "确定", DialogResult = DialogResult.OK, Width = 96, Height = 36, BackColor = Accent, ForeColor = Color.White };
         ok.FlatAppearance.BorderSize = 0;
-        var cancel = new Button { Text = "取消", DialogResult = DialogResult.Cancel, Width = 82, Height = 36, FlatStyle = FlatStyle.Flat };
+        var cancel = new ModernButton { Text = "取消", DialogResult = DialogResult.Cancel, Width = 82, Height = 36 };
         cancel.FlatAppearance.BorderColor = Color.FromArgb(203, 213, 225);
-        var today = new Button { Text = "今天", Width = 72, Height = 36, FlatStyle = FlatStyle.Flat };
+        var today = new ModernButton { Text = "今天", Width = 72, Height = 36 };
         today.Click += (_, _) =>
         {
             if (_mode == DateSelectionMode.Start) { StartDate = DateTime.Today; HasStart = true; HasEnd = false; }
@@ -226,7 +226,7 @@ public sealed class DateRangePickerDialog : Form
         label.Text = selected
             ? _showLunar.Checked ? $"{date:yyyy-MM-dd}  {LunarDate.FullText(date)}" : $"{date:yyyy-MM-dd}"
             : "未选择";
-        label.ForeColor = selected ? Color.FromArgb(15, 23, 42) : Color.FromArgb(148, 163, 184);
+        label.ForeColor = selected ? AppTheme.Text : AppTheme.Muted;
     }
 
     private static ComboBox TimeChoice(int count)
@@ -235,10 +235,11 @@ public sealed class DateRangePickerDialog : Form
         {
             DropDownStyle = ComboBoxStyle.DropDownList,
             FlatStyle = FlatStyle.Flat,
-            Width = 66,
+            Width = 82,
+            DropDownWidth = 104,
             Height = 30,
-            BackColor = Color.White,
-            Font = new Font("Microsoft YaHei UI", 9F),
+            BackColor = AppTheme.Surface,
+            Font = UiTokens.Font(),
             IntegralHeight = false,
             DropDownHeight = 240
         };
@@ -247,7 +248,7 @@ public sealed class DateRangePickerDialog : Form
         return box;
     }
 
-    private static Button ModeButton(string text) => new()
+    private static Button ModeButton(string text) => new ModernButton
     {
         Text = text,
         Width = 96,
@@ -273,16 +274,16 @@ public sealed class DateRangePickerDialog : Form
     private static void StyleLunarToggle(CheckBox toggle)
     {
         toggle.Text = toggle.Checked ? "农历  开" : "农历  关";
-        toggle.BackColor = toggle.Checked ? Color.FromArgb(239, 246, 255) : Color.White;
-        toggle.ForeColor = toggle.Checked ? Accent : Color.FromArgb(100, 116, 139);
-        toggle.FlatAppearance.BorderColor = toggle.Checked ? Color.FromArgb(147, 197, 253) : Color.FromArgb(203, 213, 225);
+        toggle.BackColor = toggle.Checked ? AppTheme.Selected : AppTheme.Surface;
+        toggle.ForeColor = toggle.Checked ? Accent : AppTheme.Muted;
+        toggle.FlatAppearance.BorderColor = toggle.Checked ? Color.FromArgb(147, 197, 253) : AppTheme.Border;
     }
 
     private static void StyleMode(Button button, bool selected)
     {
-        button.BackColor = selected ? Accent : Color.White;
-        button.ForeColor = selected ? Color.White : Color.FromArgb(71, 85, 105);
-        button.FlatAppearance.BorderColor = selected ? Accent : Color.FromArgb(203, 213, 225);
+        button.BackColor = selected ? Accent : AppTheme.Surface;
+        button.ForeColor = selected ? Color.White : AppTheme.Text;
+        button.FlatAppearance.BorderColor = selected ? Accent : AppTheme.Border;
     }
 
     private enum DateSelectionMode { Start, End, Range }
@@ -293,20 +294,20 @@ public sealed class DateRangePickerDialog : Form
         minute.SelectedIndex = Math.Clamp(time.Minutes, 0, 59);
     }
 
-    private static Label ValueLabel() => new() { Dock = DockStyle.Fill, ForeColor = Color.FromArgb(15, 23, 42), Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Bold) };
+    private static Label ValueLabel() => new() { Dock = DockStyle.Fill, ForeColor = UiTokens.Text, Font = UiTokens.Font(UiTokens.TextEmphasis, FontStyle.Bold) };
 
     private sealed class MonthPane : UserControl
     {
         private readonly int _offset;
-        private readonly Button _title = new() { Dock = DockStyle.Fill, FlatStyle = FlatStyle.Flat, Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Bold), ForeColor = Color.FromArgb(15, 23, 42), BackColor = Color.White };
+        private readonly Button _title = new() { Dock = DockStyle.Fill, FlatStyle = FlatStyle.Flat, Font = UiTokens.Font(UiTokens.TextEmphasis, FontStyle.Bold), ForeColor = UiTokens.Text, BackColor = UiTokens.Surface };
         private readonly CalendarCanvas _canvas;
 
         public MonthPane(int offset, Action<DateTime> choose, Action<DateTime, int> chooseMonth, Action<int, int> moveMonth)
         {
-            _offset = offset; Dock = DockStyle.Fill; BackColor = Color.White;
+            _offset = offset; Dock = DockStyle.Fill; BackColor = AppTheme.Surface;
             _canvas = new CalendarCanvas(choose);
             _title.FlatAppearance.BorderSize = 0; _title.Click += (_, _) => chooseMonth(_canvas.Month, _offset);
-            var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 3, BackColor = Color.White };
+            var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 3, BackColor = AppTheme.Surface };
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 40)); root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 40));
             var prev = NavButton("‹"); var next = NavButton("›");
@@ -320,7 +321,7 @@ public sealed class DateRangePickerDialog : Form
 
         private static Button NavButton(string text)
         {
-            var button = new Button { Text = text, Dock = DockStyle.Fill, FlatStyle = FlatStyle.Flat, BackColor = Color.White, ForeColor = Color.FromArgb(71, 85, 105), Font = new Font("Microsoft YaHei UI", 13F), Cursor = Cursors.Hand };
+            var button = new Button { Text = text, Dock = DockStyle.Fill, FlatStyle = FlatStyle.Flat, BackColor = UiTokens.Surface, ForeColor = UiTokens.TextMuted, Font = UiTokens.Font(UiTokens.TextSection), Cursor = Cursors.Hand };
             button.FlatAppearance.BorderSize = 0;
             return button;
         }
@@ -334,7 +335,7 @@ public sealed class DateRangePickerDialog : Form
         private bool _showLunar = true;
         public DateTime Month { get; private set; }
 
-        public CalendarCanvas(Action<DateTime> choose) { _choose = choose; Dock = DockStyle.Fill; DoubleBuffered = true; Cursor = Cursors.Hand; BackColor = Color.White; }
+        public CalendarCanvas(Action<DateTime> choose) { _choose = choose; Dock = DockStyle.Fill; DoubleBuffered = true; Cursor = Cursors.Hand; BackColor = AppTheme.Surface; }
         public void SetMonth(DateTime month, DateTime? start, DateTime? end) { Month = month; _start = start; _end = end; Invalidate(); }
         public void SetShowLunar(bool value) { _showLunar = value; Invalidate(); }
 
@@ -343,7 +344,7 @@ public sealed class DateRangePickerDialog : Form
             base.OnPaint(e); e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
             var width = Math.Max(1, ClientSize.Width / 7); var height = Math.Max(1, (ClientSize.Height - 38) / 6);
             var weekdays = new[] { "一", "二", "三", "四", "五", "六", "日" };
-            for (var i = 0; i < 7; i++) TextRenderer.DrawText(e.Graphics, weekdays[i], Font, new Rectangle(i * width, 0, width, 30), Color.FromArgb(100, 116, 139), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            for (var i = 0; i < 7; i++) TextRenderer.DrawText(e.Graphics, weekdays[i], Font, new Rectangle(i * width, 0, width, 30), AppTheme.Muted, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
             var first = Month.AddDays(-(((int)Month.DayOfWeek + 6) % 7));
             for (var i = 0; i < 42; i++) DrawDay(e.Graphics, first.AddDays(i), new Rectangle(i % 7 * width, 38 + i / 7 * height, width, height));
         }
@@ -355,10 +356,10 @@ public sealed class DateRangePickerDialog : Form
             var endpoint = day.Date == _start || day.Date == _end; var hover = day.Date == _hover;
             var size = Math.Min(58, Math.Min(rect.Width - 8, rect.Height - 8));
             var circle = new Rectangle(rect.Left + (rect.Width - size) / 2, rect.Top + (rect.Height - size) / 2, size, size);
-            if (inRange) { using var range = new SolidBrush(Color.FromArgb(239, 246, 255)); g.FillRectangle(range, new Rectangle(rect.Left, circle.Top, rect.Width, circle.Height)); }
-            if (endpoint || hover) { using var path = Round(circle, size / 2); using var brush = new SolidBrush(endpoint ? Accent : Color.FromArgb(226, 232, 240)); g.FillPath(brush, path); }
-            var main = endpoint ? Color.White : inMonth ? Color.FromArgb(15, 23, 42) : Color.FromArgb(203, 213, 225);
-            var sub = endpoint ? Color.White : inMonth ? Color.FromArgb(100, 116, 139) : Color.FromArgb(203, 213, 225);
+            if (inRange) { using var range = new SolidBrush(AppTheme.Selected); g.FillRectangle(range, new Rectangle(rect.Left, circle.Top, rect.Width, circle.Height)); }
+            if (endpoint || hover) { using var path = Round(circle, size / 2); using var brush = new SolidBrush(endpoint ? Accent : AppTheme.Hover); g.FillPath(brush, path); }
+            var main = endpoint ? Color.White : inMonth ? AppTheme.Text : AppTheme.Border;
+            var sub = endpoint ? Color.White : inMonth ? AppTheme.Muted : AppTheme.Border;
             var mainTop = _showLunar ? circle.Top + 7 : circle.Top + (circle.Height - 20) / 2;
             TextRenderer.DrawText(g, day.Day.ToString(), Font, new Rectangle(circle.Left, mainTop, circle.Width, 20), main, TextFormatFlags.HorizontalCenter | TextFormatFlags.NoPadding);
             if (_showLunar)
@@ -378,8 +379,8 @@ public sealed class DateRangePickerDialog : Form
 
     internal sealed class MonthYearDialog : Form
     {
-        private readonly TableLayoutPanel _root = new() { Dock = DockStyle.Fill, Padding = new Padding(20), RowCount = 2, ColumnCount = 1, BackColor = Color.White };
-        private readonly Label _title = new() { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Microsoft YaHei UI", 11F, FontStyle.Bold) };
+        private readonly TableLayoutPanel _root = new() { Dock = DockStyle.Fill, Padding = new Padding(20), RowCount = 2, ColumnCount = 1, BackColor = AppTheme.Surface };
+        private readonly Label _title = new() { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = UiTokens.Font(UiTokens.TextSection, FontStyle.Bold) };
         private readonly Panel _body = new() { Dock = DockStyle.Fill };
         private int _selectedYear;
         private int _decadeStart;
@@ -396,8 +397,8 @@ public sealed class DateRangePickerDialog : Form
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterParent;
-            Font = new Font("Microsoft YaHei UI", 9F);
-            BackColor = Color.White;
+            Font = UiTokens.Font();
+            BackColor = AppTheme.Surface;
             _root.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
             _root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             _root.Controls.Add(Header());
@@ -409,7 +410,7 @@ public sealed class DateRangePickerDialog : Form
 
         private Control Header()
         {
-            var header = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, BackColor = Color.White };
+            var header = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, BackColor = AppTheme.Surface };
             header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 48));
             header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 48));
@@ -461,7 +462,7 @@ public sealed class DateRangePickerDialog : Form
 
         private static TableLayoutPanel Grid(int rows, int columns)
         {
-            var grid = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = rows, ColumnCount = columns, Padding = new Padding(6, 12, 6, 8), BackColor = Color.White };
+            var grid = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = rows, ColumnCount = columns, Padding = new Padding(6, 12, 6, 8), BackColor = AppTheme.Surface };
             for (var i = 0; i < rows; i++) grid.RowStyles.Add(new RowStyle(SizeType.Percent, 100F / rows));
             for (var i = 0; i < columns; i++) grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F / columns));
             return grid;
@@ -469,16 +470,15 @@ public sealed class DateRangePickerDialog : Form
 
         private static Button ChoiceButton(string text, bool selected, bool muted)
         {
-            var button = new Button { Text = text, Dock = DockStyle.Fill, Margin = new Padding(7), FlatStyle = FlatStyle.Flat, BackColor = selected ? Accent : Color.White, ForeColor = selected ? Color.White : muted ? Color.FromArgb(148, 163, 184) : Color.FromArgb(15, 23, 42), Cursor = Cursors.Hand };
-            button.FlatAppearance.BorderSize = selected ? 0 : 1;
-            button.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
-            button.FlatAppearance.MouseOverBackColor = selected ? Accent : Color.FromArgb(239, 246, 255);
+            var button = new ModernButton { Text = text, Dock = DockStyle.Fill, Margin = new Padding(7), BackColor = selected ? Accent : AppTheme.Surface, ForeColor = selected ? Color.White : muted ? AppTheme.Muted : AppTheme.Text, Cursor = Cursors.Hand };
+            button.FlatAppearance.BorderColor = AppTheme.Border;
+            button.FlatAppearance.MouseOverBackColor = selected ? Accent : AppTheme.Selected;
             return button;
         }
 
         private static Button NavButton(string text)
         {
-            var button = new Button { Text = text, Dock = DockStyle.Fill, FlatStyle = FlatStyle.Flat, BackColor = Color.White, ForeColor = Color.FromArgb(71, 85, 105), Font = new Font("Microsoft YaHei UI", 14F), Cursor = Cursors.Hand };
+            var button = new Button { Text = text, Dock = DockStyle.Fill, FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Surface, ForeColor = AppTheme.Muted, Font = new Font("Microsoft YaHei UI", 14F), Cursor = Cursors.Hand };
             button.FlatAppearance.BorderSize = 0;
             return button;
         }

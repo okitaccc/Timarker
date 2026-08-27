@@ -5,15 +5,16 @@ namespace Timarker;
 
 internal sealed class ProjectView : UserControl
 {
-    private static readonly Color AppBack = Color.FromArgb(246, 247, 251);
-    private static readonly Color CardBack = Color.White;
-    private static readonly Color TextMain = Color.FromArgb(15, 23, 42);
-    private static readonly Color TextMuted = Color.FromArgb(100, 116, 139);
-    private static readonly Color Accent = Color.FromArgb(37, 99, 235);
-    private static readonly Color Border = Color.FromArgb(226, 232, 240);
-    private static readonly Color Success = Color.FromArgb(22, 163, 74);
+    private static Color AppBack => UiTokens.AppBackground;
+    private static Color CardBack => UiTokens.Surface;
+    private static Color TextMain => UiTokens.Text;
+    private static Color TextMuted => UiTokens.TextMuted;
+    private static Color Accent => UiTokens.Primary;
+    private static Color Border => UiTokens.Border;
+    private static Color Success => UiTokens.Success;
 
     private readonly List<EventItem> _events;
+    private readonly List<Project> _projectData;
     private readonly Action<EventItem> _edit;
     private readonly Action<EventItem> _complete;
     private readonly Action<EventItem> _delete;
@@ -55,9 +56,10 @@ internal sealed class ProjectView : UserControl
     private readonly Button _moveUp = Button("上移");
     private readonly Button _moveDown = Button("下移");
     private readonly Button _completeStep = Button("完成步骤", true);
-    public ProjectView(List<EventItem> events, Action<EventItem> edit, Action<EventItem> complete, Action<EventItem> delete, Action save)
+    public ProjectView(List<EventItem> events, List<Project> projects, Action<EventItem> edit, Action<EventItem> complete, Action<EventItem> delete, Action save)
     {
         _events = events;
+        _projectData = projects;
         _edit = edit;
         _complete = complete;
         _delete = delete;
@@ -79,7 +81,7 @@ internal sealed class ProjectView : UserControl
         {
             for (var i = 0; i < _projects.Items.Count; i++)
             {
-                if (_projects.Items[i] is EventItem project && project.Id == selectedId)
+                if (_projects.Items[i] is Project project && project.Id == selectedId)
                 {
                     _projects.SelectedIndex = i;
                     break;
@@ -233,10 +235,10 @@ internal sealed class ProjectView : UserControl
 
     private void CreateProject()
     {
-        var project = new EventItem { IsProject = true, Type = EventType.Maybe, Priority = EventPriority.None, Tags = "项目" };
+        var project = new Project();
         using var dialog = new ProjectDialog(project, "新建项目");
         if (dialog.ShowDialog(FindForm()) != DialogResult.OK) return;
-        _events.Add(project);
+        _projectData.Add(project);
         _save();
         RefreshView();
         SelectProject(project.Id);
@@ -259,8 +261,6 @@ internal sealed class ProjectView : UserControl
         var now = DateTime.Now.AddHours(1);
         var step = new EventItem
         {
-            ProjectId = project.Id,
-            ProjectOrder = Steps(project).Count + 1,
             StartAt = now,
             Type = EventType.StartAt,
             Status = EventStatus.Pending,
@@ -268,8 +268,8 @@ internal sealed class ProjectView : UserControl
         };
         using var dialog = new EventEditForm(step, true);
         if (dialog.ShowDialog(FindForm()) != DialogResult.OK) return;
-        step.ProjectId = project.Id;
         _events.Add(step);
+        project.Steps.Add(new ProjectStep { EventId = step.Id, Order = project.Steps.Count + 1 });
         _save();
         RefreshSelectedProject();
         SelectStep(step.Id);
@@ -298,7 +298,7 @@ internal sealed class ProjectView : UserControl
         var target = index + direction;
         if (index < 0 || target < 0 || target >= steps.Count) return;
         (steps[index], steps[target]) = (steps[target], steps[index]);
-        NormalizeOrder(steps);
+        NormalizeOrder(project, steps);
         _save();
         RefreshSelectedProject();
         SelectStep(selected.Id);
@@ -327,7 +327,7 @@ internal sealed class ProjectView : UserControl
         var page = new TaskDialogPage
         {
             Caption = L.T("删除项目"),
-            Heading = L.IsEnglish ? $"Delete “{project.Title}”?" : $"确定删除“{project.Title}”吗？",
+            Heading = L.IsEnglish ? $"Delete “{project.Name}”?" : $"确定删除“{project.Name}”吗？",
             Text = L.T("请选择项目步骤的处理方式。"),
             Icon = TaskDialogIcon.Warning,
             AllowCancel = true
@@ -343,13 +343,9 @@ internal sealed class ProjectView : UserControl
         }
         else
         {
-            foreach (var step in steps)
-            {
-                step.ProjectId = null;
-                step.ProjectOrder = 0;
-            }
+            project.Steps.Clear();
         }
-        _events.Remove(project);
+        _projectData.Remove(project);
         _save();
         RefreshView();
     }
@@ -377,14 +373,14 @@ internal sealed class ProjectView : UserControl
         }
 
         var steps = Steps(project);
-        NormalizeOrder(steps);
+        NormalizeOrder(project, steps);
         foreach (var step in steps) _steps.Items.Add(step);
         var completed = steps.Count(IsHandled);
         var progress = steps.Count == 0 ? 0 : completed * 100 / steps.Count;
         var next = steps.FirstOrDefault(x => !IsHandled(x));
         var allCompleted = steps.Count > 0 && completed == steps.Count;
-        project.Status = allCompleted ? EventStatus.Done : EventStatus.Pending;
-        _title.Text = project.Title;
+        project.IsCompleted = allCompleted;
+        _title.Text = project.Name;
         _subtitle.Text = string.IsNullOrWhiteSpace(project.Notes) ? "按顺序完成下面的步骤。" : project.Notes;
         _percent.Text = $"{progress}%";
         _progress.Value = progress;
@@ -429,38 +425,43 @@ internal sealed class ProjectView : UserControl
             menu.Items.Add("下移", null, (_, _) => MoveStep(1));
             menu.Items.Add("移出项目", null, (_, _) =>
             {
-                step.ProjectId = null;
-                step.ProjectOrder = 0;
+                var project = SelectedProject();
+                project?.Steps.RemoveAll(x => x.EventId == step.Id);
                 _save();
                 RefreshSelectedProject();
             });
             menu.Items.Add(new ToolStripSeparator());
             var delete = menu.Items.Add("删除", null, (_, _) => { _delete(step); RefreshSelectedProject(); });
-            delete.ForeColor = Color.FromArgb(220, 38, 38);
+            delete.ForeColor = UiTokens.Danger;
             L.Apply(menu);
         };
         _steps.ContextMenuStrip = menu;
     }
 
-    private List<EventItem> Projects() => _events.Where(x => x.IsProject).OrderBy(x => x.Status is EventStatus.Done).ThenBy(x => x.DeadlineAt).ThenBy(x => x.Title).ToList();
+    private List<Project> Projects() => _projectData.OrderBy(x => x.IsCompleted).ThenBy(x => x.DeadlineAt).ThenBy(x => x.Name).ToList();
 
-    private List<EventItem> Steps(EventItem project) => _events.Where(x => x.ProjectId == project.Id && !x.IsProject && !x.IsGroup)
-        .OrderBy(x => x.ProjectOrder).ThenBy(x => x.CreatedAt).ToList();
+    private List<EventItem> Steps(Project project) => project.Steps.OrderBy(x => x.Order)
+        .Select(x => _events.FirstOrDefault(item => item.Id == x.EventId)).Where(x => x is not null).Cast<EventItem>().ToList();
 
     private static bool IsHandled(EventItem item) => item.Status is EventStatus.Done or EventStatus.Skipped or EventStatus.Cancelled;
 
-    private static void NormalizeOrder(IReadOnlyList<EventItem> steps)
+    private static void NormalizeOrder(Project project, IReadOnlyList<EventItem> steps)
     {
-        for (var i = 0; i < steps.Count; i++) steps[i].ProjectOrder = i + 1;
+        project.Steps = steps.Select((step, index) =>
+        {
+            var link = project.Steps.FirstOrDefault(x => x.EventId == step.Id) ?? new ProjectStep { EventId = step.Id };
+            link.Order = index + 1;
+            return link;
+        }).ToList();
     }
 
-    private EventItem? SelectedProject() => _projects.SelectedItem as EventItem;
+    private Project? SelectedProject() => _projects.SelectedItem as Project;
 
     private void SelectProject(Guid id)
     {
         for (var i = 0; i < _projects.Items.Count; i++)
         {
-            if (_projects.Items[i] is EventItem project && project.Id == id) _projects.SelectedIndex = i;
+            if (_projects.Items[i] is Project project && project.Id == id) _projects.SelectedIndex = i;
         }
     }
 
@@ -474,19 +475,19 @@ internal sealed class ProjectView : UserControl
 
     private void DrawProject(object? sender, DrawItemEventArgs e)
     {
-        if (e.Index < 0 || _projects.Items[e.Index] is not EventItem project) return;
+        if (e.Index < 0 || _projects.Items[e.Index] is not Project project) return;
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
         var bounds = Rectangle.Inflate(e.Bounds, -3, -5);
         var selected = (e.State & DrawItemState.Selected) != 0;
         using var path = RoundRect(bounds, 10);
-        using var back = new SolidBrush(selected ? Color.FromArgb(239, 246, 255) : CardBack);
+        using var back = new SolidBrush(selected ? AppTheme.Selected : CardBack);
         using var border = new Pen(selected ? Accent : Border);
         e.Graphics.FillPath(back, path);
         e.Graphics.DrawPath(border, path);
         var steps = Steps(project);
         var completed = steps.Count(IsHandled);
         using var titleFont = new Font(Font.FontFamily, 10F, FontStyle.Bold);
-        TextRenderer.DrawText(e.Graphics, project.Title, titleFont,
+        TextRenderer.DrawText(e.Graphics, project.Name, titleFont,
             new Rectangle(bounds.Left + 14, bounds.Top + 10, bounds.Width - 28, 24), TextMain, TextFormatFlags.EndEllipsis);
         var meta = steps.Count == 0 ? "尚未添加步骤" : $"{completed}/{steps.Count} 步 · {(steps.Count == 0 ? 0 : completed * 100 / steps.Count)}%";
         TextRenderer.DrawText(e.Graphics, meta, Font, new Rectangle(bounds.Left + 14, bounds.Top + 38, bounds.Width - 28, 22),
@@ -521,7 +522,7 @@ internal sealed class ProjectView : UserControl
         var selected = (e.State & DrawItemState.Selected) != 0;
         var card = new Rectangle(e.Bounds.Left + 50, e.Bounds.Top + 7, e.Bounds.Width - 56, e.Bounds.Height - 14);
         using var path = RoundRect(card, 10);
-        using var back = new SolidBrush(selected ? Color.FromArgb(239, 246, 255) : Color.FromArgb(248, 250, 252));
+        using var back = new SolidBrush(selected ? AppTheme.Selected : AppTheme.SurfaceAlt);
         using var border = new Pen(selected ? Accent : Border);
         e.Graphics.FillPath(back, path);
         e.Graphics.DrawPath(border, path);
@@ -618,11 +619,11 @@ internal sealed class ProjectView : UserControl
             Height = 34,
             FlatStyle = FlatStyle.Flat,
             BackColor = primary ? Accent : CardBack,
-            ForeColor = primary ? Color.White : danger ? Color.FromArgb(220, 38, 38) : TextMain,
+            ForeColor = primary ? Color.White : danger ? UiTokens.Danger : TextMain,
             Margin = new Padding(0, 0, 8, 0),
             Cursor = Cursors.Hand
         };
-        button.FlatAppearance.BorderColor = primary ? Accent : danger ? Color.FromArgb(254, 202, 202) : Border;
+        button.FlatAppearance.BorderColor = primary ? Accent : danger ? UiTokens.Danger : Border;
         return button;
     }
 
@@ -665,13 +666,13 @@ internal sealed class ProjectView : UserControl
 
     private sealed class ProjectDialog : Form
     {
-        private readonly EventItem _project;
+        private readonly Project _project;
         private readonly ModernTextBox _name = new() { Dock = DockStyle.Fill, PlaceholderText = "例如：完成毕业设计" };
         private readonly ModernTextBox _notes = new() { Dock = DockStyle.Fill, Multiline = true, Height = 72, PlaceholderText = "项目目标或完成标准" };
         private readonly Button _deadlineButton = Button("选择总体截止日期");
         private DateTime? _deadline;
 
-        public ProjectDialog(EventItem project, string title)
+        public ProjectDialog(Project project, string title)
         {
             _project = project;
             _deadline = project.DeadlineAt;
@@ -708,7 +709,7 @@ internal sealed class ProjectView : UserControl
             AcceptButton = save;
             CancelButton = cancel;
             _deadlineButton.Click += (_, _) => ChooseDeadline();
-            _name.Text = project.Title;
+            _name.Text = project.Name;
             _notes.Text = project.Notes;
             RefreshDeadline();
             L.Apply(this);
@@ -746,11 +747,9 @@ internal sealed class ProjectView : UserControl
                 MessageBox.Show("请输入项目名称。", "缺少项目名称", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
-            _project.Title = _name.Text.Trim();
+            _project.Name = _name.Text.Trim();
             _project.Notes = _notes.Text.Trim();
             _project.DeadlineAt = _deadline;
-            _project.IsProject = true;
-            _project.Type = EventType.Maybe;
             _project.UpdatedAt = DateTime.Now;
             DialogResult = DialogResult.OK;
         }

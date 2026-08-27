@@ -8,11 +8,11 @@ public enum CloseBehavior
 
 public sealed class CloseBehaviorDialog : Form
 {
-    private static readonly Color AppBack = Color.FromArgb(246, 247, 251);
-    private static readonly Color TextMain = Color.FromArgb(31, 41, 55);
-    private static readonly Color TextMuted = Color.FromArgb(100, 116, 139);
-    private static readonly Color Accent = Color.FromArgb(37, 99, 235);
-    private static readonly Color Border = Color.FromArgb(226, 232, 240);
+    private static Color AppBack => AppTheme.AppBack;
+    private static Color TextMain => AppTheme.Text;
+    private static Color TextMuted => AppTheme.Muted;
+    private static Color Accent => UiTokens.Primary;
+    private static Color Border => AppTheme.Border;
     private readonly RadioButton _minimize = new() { Text = "最小化到系统托盘", AutoSize = true, Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold) };
     private readonly RadioButton _exit = new() { Text = "退出 Timarker", AutoSize = true, Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold) };
     private readonly CheckBox _remember = new() { Text = "记住我的选择，以后不再询问", AutoSize = true };
@@ -115,7 +115,7 @@ public sealed class CloseBehaviorDialog : Form
         return frame;
     }
 
-    private static Button ActionButton(string text, bool primary) => new()
+    private static Button ActionButton(string text, bool primary) => new ModernButton
     {
         Text = text,
         Width = primary ? 96 : 82,

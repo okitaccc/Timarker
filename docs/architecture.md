@@ -40,6 +40,6 @@ MainForm timer
 
 - 单机、本地 JSON 存储。
 - 暂无账号、云同步和跨设备通知协调。
-- 暂无插件系统或通用工作流引擎。
+- 插件位于 `%LocalAppData%\Timarker\Plugins`，每个插件包含 `plugin.json` 和实现 `ITimarkerPlugin` 的 .NET 程序集；插件属于受信任的本机代码，不提供进程级沙箱。
+- 暂无通用工作流引擎。
 - 项目/组合事件继续复用 `EventItem`，在确有复杂度前不拆分额外领域层。
-

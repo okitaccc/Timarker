@@ -14,22 +14,22 @@ public static class EventCardRenderer
         graphics.FillRectangle(canvasBrush, itemBounds);
 
         var card = Rectangle.Inflate(itemBounds, -4, -7);
-        using var cardPath = RoundRect(card, 10);
-        using var back = new SolidBrush(selected ? Color.FromArgb(239, 246, 255) : Color.FromArgb(248, 250, 252));
-        using var border = new Pen(selected ? Color.FromArgb(37, 99, 235) : Color.FromArgb(226, 232, 240));
+        using var cardPath = RoundRect(card, UiTokens.RadiusMedium);
+        using var back = new SolidBrush(selected ? UiTokens.Selected : UiTokens.SurfaceSubtle);
+        var typeColor = UiTokens.EventTypeColor(item.Type);
+        using var border = new Pen(selected ? typeColor : UiTokens.Border);
         graphics.FillPath(back, cardPath);
         graphics.DrawPath(border, cardPath);
 
-        var statusColor = StatusColor(item.Status);
-        using var dot = new SolidBrush(statusColor);
+        using var dot = new SolidBrush(typeColor);
         graphics.FillEllipse(dot, card.Left + 12, card.Top + 15, 8, 8);
 
         var contentLeft = card.Left + 30;
         var contentWidth = Math.Max(20, card.Right - contentLeft - (showActions ? 88 : 14));
         var due = item.NextDueAt(DateTime.Now)?.ToString("MM-dd HH:mm") ?? L.T("未设置时间");
-        using var titleFont = new Font(font.FontFamily, 10F, FontStyle.Bold);
-        using var metaFont = new Font(font.FontFamily, 8.5F);
-        var titleColor = item.Status is EventStatus.Overdue ? Color.FromArgb(220, 38, 38) : Color.FromArgb(15, 23, 42);
+        using var titleFont = UiTokens.DrawingFont(UiTokens.TextEmphasis, FontStyle.Bold);
+        using var metaFont = UiTokens.DrawingFont(UiTokens.TextSmall);
+        var titleColor = item.Status is EventStatus.Overdue ? UiTokens.Danger : UiTokens.Text;
         TextRenderer.DrawText(graphics, item.Title, titleFont, new Rectangle(contentLeft, card.Top + 9, contentWidth, 24), titleColor, TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
         var meta = item.Type switch
         {
@@ -50,7 +50,7 @@ public static class EventCardRenderer
                 _ => $"{due}  ·  {L.T(item.TypeText)}  ·  {L.T(item.StatusText)}"
             };
         }
-        TextRenderer.DrawText(graphics, meta, metaFont, new Rectangle(contentLeft, card.Top + 35, contentWidth, 20), Color.FromArgb(100, 116, 139), TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+        TextRenderer.DrawText(graphics, meta, metaFont, new Rectangle(contentLeft, card.Top + 35, contentWidth, 20), AppTheme.Muted, TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
 
         var chipX = contentLeft;
         foreach (var tag in SplitTags($"{item.Categories}, {item.Tags}").Distinct(StringComparer.OrdinalIgnoreCase).Take(3))
@@ -63,17 +63,20 @@ public static class EventCardRenderer
             }
             var chipRect = new Rectangle(chipX, card.Top + 63, width, 22);
             using var chipPath = RoundRect(chipRect, 10);
-            using var chipBack = new SolidBrush(Color.FromArgb(241, 245, 249));
+            using var chipBack = new SolidBrush(AppTheme.Hover);
             graphics.FillPath(chipBack, chipPath);
-            TextRenderer.DrawText(graphics, text, metaFont, chipRect, Color.FromArgb(37, 99, 235), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            TextRenderer.DrawText(graphics, text, metaFont, chipRect, typeColor, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
             chipX = chipRect.Right + 6;
         }
 
         if (showActions)
         {
             DrawActionButton(graphics, CountdownButtonBounds(itemBounds), L.T("倒计时"), false);
-            var completeText = item.IsRecurringSeries ? "完成本次" : item.Status is EventStatus.Done ? "已完成" : "完成";
-            DrawActionButton(graphics, CompleteButtonBounds(itemBounds), L.T(completeText), !item.IsRecurringSeries && item.Status is EventStatus.Done);
+            if (item.Type is not EventType.Anniversary)
+            {
+                var completeText = item.IsRecurringSeries ? "完成本次" : item.Status is EventStatus.Done ? "已完成" : "完成";
+                DrawActionButton(graphics, CompleteButtonBounds(itemBounds), L.T(completeText), !item.IsRecurringSeries && item.Status is EventStatus.Done);
+            }
         }
     }
 
@@ -93,12 +96,12 @@ public static class EventCardRenderer
     {
         text = L.T(text);
         using var path = RoundRect(bounds, 6);
-        using var back = new SolidBrush(muted ? Color.FromArgb(241, 245, 249) : Color.White);
-        using var border = new Pen(muted ? Color.FromArgb(226, 232, 240) : Color.FromArgb(147, 197, 253));
+        using var back = new SolidBrush(muted ? AppTheme.Hover : AppTheme.Surface);
+        using var border = new Pen(muted ? AppTheme.Border : Color.FromArgb(147, 197, 253));
         graphics.FillPath(back, path);
         graphics.DrawPath(border, path);
         TextRenderer.DrawText(graphics, text, SystemFonts.MessageBoxFont, bounds,
-            muted ? Color.FromArgb(148, 163, 184) : Color.FromArgb(37, 99, 235),
+            muted ? UiTokens.TextMuted : UiTokens.Primary,
             TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
     }
 
@@ -118,12 +121,4 @@ public static class EventCardRenderer
         return path;
     }
 
-    private static Color StatusColor(EventStatus status) => status switch
-    {
-        EventStatus.Overdue => Color.FromArgb(220, 38, 38),
-        EventStatus.Done => Color.FromArgb(22, 163, 74),
-        EventStatus.Skipped or EventStatus.Cancelled => Color.FromArgb(100, 116, 139),
-        EventStatus.InProgress => Color.FromArgb(37, 99, 235),
-        _ => Color.FromArgb(79, 70, 229)
-    };
 }

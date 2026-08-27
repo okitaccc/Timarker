@@ -5,16 +5,21 @@ namespace Timarker;
 
 public sealed class HistoryView : UserControl
 {
-    private static readonly Color AppBack = Color.FromArgb(246, 247, 251);
-    private static readonly Color PanelBack = Color.White;
-    private static readonly Color TextMain = Color.FromArgb(31, 41, 55);
-    private static readonly Color TextMuted = Color.FromArgb(100, 116, 139);
-    private static readonly Color Accent = Color.FromArgb(37, 99, 235);
-    private static readonly Color Border = Color.FromArgb(226, 232, 240);
+    private static Color AppBack => UiTokens.AppBackground;
+    private static Color PanelBack => UiTokens.Surface;
+    private static Color TextMain => UiTokens.Text;
+    private static Color TextMuted => UiTokens.TextMuted;
+    private static Color Accent => UiTokens.Primary;
+    private static Color Border => UiTokens.Border;
     private readonly List<ActivityRecord> _records;
     private readonly List<EventItem> _events;
     private readonly Action _save;
     private readonly RecordHeatmap _heatmap;
+    private TableLayoutPanel? _shell;
+    private Control? _editor;
+    private Label? _pageTitle;
+    private Label? _pageSubtitle;
+    private bool _eventOnly;
     private readonly ListBox _timeline = new() { Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, DrawMode = DrawMode.OwnerDrawVariable, BackColor = AppBack };
     private readonly TableLayoutPanel _summary = new() { Dock = DockStyle.Fill, BackColor = PanelBack, Margin = new Padding(0, 0, 14, 14) };
     private readonly TextBox _title = new() { Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, PlaceholderText = "例如：完成了周报初稿" };
@@ -41,6 +46,7 @@ public sealed class HistoryView : UserControl
     private void BuildUi()
     {
         var shell = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, Padding = new Padding(26), BackColor = AppBack };
+        _shell = shell;
         shell.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         shell.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 330));
         shell.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
@@ -48,8 +54,10 @@ public sealed class HistoryView : UserControl
 
         var words = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, Margin = new Padding(2, 0, 0, 0) };
         words.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
-        words.Controls.Add(new Label { Text = "记录", Dock = DockStyle.Fill, Font = new Font(Font.FontFamily, 18F, FontStyle.Bold), ForeColor = TextMain });
-        words.Controls.Add(new Label { Text = "回看完成的事，也看见自己走了多远。", Dock = DockStyle.Fill, ForeColor = TextMuted }, 0, 1);
+        _pageTitle = new Label { Text = "复盘", Dock = DockStyle.Fill, Font = new Font(Font.FontFamily, 18F, FontStyle.Bold), ForeColor = TextMain };
+        _pageSubtitle = new Label { Text = "记下工作、学习与每天的收获。", Dock = DockStyle.Fill, ForeColor = TextMuted };
+        words.Controls.Add(_pageTitle);
+        words.Controls.Add(_pageSubtitle, 0, 1);
         shell.Controls.Add(words, 0, 0);
         shell.SetColumnSpan(words, 2);
 
@@ -77,7 +85,8 @@ public sealed class HistoryView : UserControl
         _empty.BringToFront();
         left.Controls.Add(timelinePanel, 0, 2);
         shell.Controls.Add(left, 0, 1);
-        shell.Controls.Add(BuildEditor(), 1, 1);
+        _editor = BuildEditor();
+        shell.Controls.Add(_editor, 1, 1);
         Controls.Add(shell);
     }
 
@@ -116,8 +125,22 @@ public sealed class HistoryView : UserControl
         BuildSummary();
         _heatmap.Invalidate();
         _timeline.Items.Clear();
-        foreach (var record in _records.OrderByDescending(x => x.OccurredAt)) _timeline.Items.Add(record);
-        _empty.Visible = _records.Count == 0;
+        var visibleRecords = VisibleRecords().OrderByDescending(x => x.OccurredAt).ToList();
+        foreach (var record in visibleRecords) _timeline.Items.Add(record);
+        _empty.Text = _eventOnly ? "完成事项后，事件足迹会自动出现在这里。" : "还没有记录，写下今天完成的事吧。";
+        _empty.Visible = visibleRecords.Count == 0;
+    }
+
+    public void SetEventOnly(bool eventOnly)
+    {
+        _eventOnly = eventOnly;
+        if (_shell is null || _editor is null || _pageTitle is null || _pageSubtitle is null) return;
+        _pageTitle.Text = eventOnly ? "事项历程" : "复盘";
+        _pageSubtitle.Text = eventOnly ? "集中查看事项、项目与重要日子的完成足迹。" : "记下工作、学习与每天的收获。";
+        _editor.Visible = !eventOnly;
+        _shell.ColumnStyles[1].Width = eventOnly ? 0 : 330;
+        _heatmap.Filter = RecordMatches;
+        RefreshView();
     }
 
     private void BuildSummary()
@@ -129,11 +152,17 @@ public sealed class HistoryView : UserControl
         _summary.RowStyles.Clear();
         _summary.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         for (var i = 0; i < 4; i++) _summary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
-        var values = new[]
+        var values = _eventOnly ? new[]
         {
             (L.T("已完成"), _records.Count(x => x.Kind is ActivityRecordKind.EventCompleted).ToString()),
             (L.T("重要时刻"), _records.Count(x => x.Kind is ActivityRecordKind.BirthdayCelebrated or ActivityRecordKind.AnniversaryCelebrated).ToString()),
             (L.T("完成项目"), _records.Count(x => x.Kind is ActivityRecordKind.ProjectCompleted).ToString()),
+            (L.T("连续记录"), L.IsEnglish ? $"{CurrentStreak()} days" : $"{CurrentStreak()} 天")
+        } : new[]
+        {
+            ("记录总数", VisibleRecords().Count().ToString()),
+            ("本月记录", VisibleRecords().Count(x => x.OccurredAt.Year == DateTime.Today.Year && x.OccurredAt.Month == DateTime.Today.Month).ToString()),
+            ("本周记录", VisibleRecords().Count(x => x.OccurredAt.Date >= DateTime.Today.AddDays(-6)).ToString()),
             (L.T("连续记录"), L.IsEnglish ? $"{CurrentStreak()} days" : $"{CurrentStreak()} 天")
         };
         for (var i = 0; i < values.Length; i++)
@@ -151,7 +180,7 @@ public sealed class HistoryView : UserControl
 
     private int CurrentStreak()
     {
-        var days = _records.Select(x => x.OccurredAt.Date).Distinct().ToHashSet();
+        var days = VisibleRecords().Select(x => x.OccurredAt.Date).Distinct().ToHashSet();
         var day = DateTime.Today;
         if (!days.Contains(day)) day = day.AddDays(-1);
         var count = 0;
@@ -208,11 +237,14 @@ public sealed class HistoryView : UserControl
     private void RefreshRecordDate() => _date.Text = $"{_recordedAt:yyyy-MM-dd}  ·  {_recordedAt:HH:mm}";
 
     private void ClearEditor() { _title.Clear(); _detail.Clear(); _recordedAt = DateTime.Now; RefreshRecordDate(); _title.Focus(); }
+    private bool RecordMatches(ActivityRecord record) => _eventOnly ? record.Kind is not ActivityRecordKind.Note : record.Kind is ActivityRecordKind.Note;
+    private IEnumerable<ActivityRecord> VisibleRecords() => _records.Where(RecordMatches);
     private static void AddLabel(TableLayoutPanel form, string text, int row) => form.Controls.Add(new Label { Text = text, Dock = DockStyle.Fill, ForeColor = TextMuted, TextAlign = ContentAlignment.BottomLeft }, 0, row);
     private static Control Field(Control control, int verticalPadding = 7)
     {
         var panel = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(10, verticalPadding, 10, verticalPadding) };
-        panel.Paint += (_, e) => { using var pen = new Pen(Border); e.Graphics.DrawRectangle(pen, 0, 0, panel.Width - 1, panel.Height - 1); };
+        ModernUi.Round(panel, 9);
+        panel.Paint += (_, e) => ModernUi.DrawBorder(e.Graphics, panel.ClientRectangle, 9, Border, 1.2F);
         panel.Controls.Add(control); return panel;
     }
     private static Button ActionButton(string text, bool primary)
@@ -222,7 +254,7 @@ public sealed class HistoryView : UserControl
             Text = text,
             Width = primary ? 100 : 76,
             Height = 38,
-            BackColor = primary ? Accent : Color.White,
+            BackColor = primary ? Accent : UiTokens.Surface,
             ForeColor = primary ? Color.White : TextMain,
             Margin = new Padding(0, 0, 10, 0),
             Cursor = Cursors.Hand
@@ -275,10 +307,10 @@ public sealed class HistoryView : UserControl
 
 internal sealed class RecordHeatmap : Control
 {
-    private static readonly Color Surface = Color.White;
-    private static readonly Color Border = Color.FromArgb(226, 232, 240);
-    private static readonly Color TextMain = Color.FromArgb(31, 41, 55);
-    private static readonly Color TextMuted = Color.FromArgb(100, 116, 139);
+    private static Color Surface => AppTheme.Surface;
+    private static Color Border => AppTheme.Border;
+    private static Color TextMain => AppTheme.Text;
+    private static Color TextMuted => AppTheme.Muted;
     private static readonly Color[] Levels =
     [
         Color.FromArgb(241, 245, 249),
@@ -289,6 +321,7 @@ internal sealed class RecordHeatmap : Control
     ];
     private readonly List<ActivityRecord> _records;
     private readonly List<EventItem> _events;
+    public Func<ActivityRecord, bool> Filter { get; set; } = _ => true;
 
     public RecordHeatmap(List<ActivityRecord> records, List<EventItem> events)
     {
@@ -317,25 +350,28 @@ internal sealed class RecordHeatmap : Control
 
         using var titleFont = new Font(Font.FontFamily, 10F, FontStyle.Bold);
         using var smallFont = new Font(Font.FontFamily, 8F);
-        TextRenderer.DrawText(e.Graphics, L.T("每日记录"), titleFont, new Point(18, 13), TextMain);
-        TextRenderer.DrawText(e.Graphics, L.T("过去一年"), Font, new Rectangle(Width - 104, 13, 86, 22), TextMuted, TextFormatFlags.Right);
+        var contentWidth = Math.Min(Math.Max(280, Width - 36), 690);
+        var contentLeft = Math.Max(18, (Width - contentWidth) / 2);
+        var contentRight = contentLeft + contentWidth;
+        TextRenderer.DrawText(e.Graphics, L.T("每日记录"), titleFont, new Point(contentLeft, 13), TextMain);
+        TextRenderer.DrawText(e.Graphics, L.T("过去一年"), Font, new Rectangle(contentRight - 86, 13, 86, 22), TextMuted, TextFormatFlags.Right);
 
         const int cell = 9;
         const int gap = 3;
         const int step = cell + gap;
-        const int gridX = 46;
+        var gridX = contentLeft + 28;
         const int gridY = 46;
-        var weeks = Math.Clamp((Width - gridX - 48) / step, 8, 53);
+        var weeks = Math.Clamp((contentWidth - 64) / step, 8, 53);
         var weekEnd = DateTime.Today.AddDays(6 - (int)DateTime.Today.DayOfWeek);
         var start = weekEnd.AddDays(-(weeks * 7 - 1));
         var clearedDays = ClearedDays(start, DateTime.Today);
-        var counts = _records
+        var counts = _records.Where(Filter)
             .GroupBy(x => x.OccurredAt.Date)
             .ToDictionary(x => x.Key, x => x.Count());
 
-        TextRenderer.DrawText(e.Graphics, L.T("一"), smallFont, new Point(20, gridY + step - 3), TextMuted);
-        TextRenderer.DrawText(e.Graphics, L.T("三"), smallFont, new Point(20, gridY + step * 3 - 3), TextMuted);
-        TextRenderer.DrawText(e.Graphics, L.T("五"), smallFont, new Point(20, gridY + step * 5 - 3), TextMuted);
+        TextRenderer.DrawText(e.Graphics, L.T("一"), smallFont, new Point(contentLeft, gridY + step - 3), TextMuted);
+        TextRenderer.DrawText(e.Graphics, L.T("三"), smallFont, new Point(contentLeft, gridY + step * 3 - 3), TextMuted);
+        TextRenderer.DrawText(e.Graphics, L.T("五"), smallFont, new Point(contentLeft, gridY + step * 5 - 3), TextMuted);
 
         var previousMonth = start.Month;
         for (var week = 0; week < weeks; week++)
@@ -351,7 +387,7 @@ internal sealed class RecordHeatmap : Control
             {
                 var date = sunday.AddDays(day);
                 var count = counts.GetValueOrDefault(date);
-                var color = date > DateTime.Today ? Color.FromArgb(248, 250, 252) : Levels[HeatLevel(count)];
+                var color = date > DateTime.Today ? AppTheme.SurfaceAlt : Levels[HeatLevel(count)];
                 using var brush = new SolidBrush(color);
                 var cellBounds = new Rectangle(gridX + week * step, gridY + day * step, cell, cell);
                 e.Graphics.FillRectangle(brush, cellBounds);
@@ -363,7 +399,7 @@ internal sealed class RecordHeatmap : Control
             }
         }
 
-        var legendX = Width - 29;
+        var legendX = contentRight - 11;
         TextRenderer.DrawText(e.Graphics, L.T("少"), smallFont, new Point(legendX - 1, gridY - 18), TextMuted);
         for (var i = 0; i < Levels.Length; i++)
         {
@@ -373,14 +409,14 @@ internal sealed class RecordHeatmap : Control
         TextRenderer.DrawText(e.Graphics, L.T("多"), smallFont, new Point(legendX - 1, gridY + Levels.Length * 13 + 1), TextMuted);
 
         using var clearedLegendPen = new Pen(Color.FromArgb(22, 163, 74), 1.4F);
-        e.Graphics.DrawRectangle(clearedLegendPen, 19, Height - 24, cell + 2, cell + 2);
-        TextRenderer.DrawText(e.Graphics, L.T("当日清空"), smallFont, new Point(36, Height - 27), TextMuted);
+        e.Graphics.DrawRectangle(clearedLegendPen, contentLeft, Height - 24, cell + 2, cell + 2);
+        TextRenderer.DrawText(e.Graphics, L.T("当日清空"), smallFont, new Point(contentLeft + 17, Height - 27), TextMuted);
     }
 
     private HashSet<DateTime> ClearedDays(DateTime start, DateTime end)
     {
         var candidates = new HashSet<DateTime>();
-        foreach (var item in _events.Where(x => !x.IsGroup && !x.IsProject && x.Status is not EventStatus.Cancelled))
+        foreach (var item in _events.Where(x => x.Status is not EventStatus.Cancelled))
         {
             foreach (var occurrence in item.Occurrences.Where(x => x.Status is EventStatus.Done))
             {
@@ -396,7 +432,7 @@ internal sealed class RecordHeatmap : Control
         return candidates.Where(day =>
         {
             var due = _events
-                .Where(x => !x.IsGroup && !x.IsProject && x.Status is not EventStatus.Cancelled)
+                .Where(x => x.Status is not EventStatus.Cancelled)
                 .Where(x => IsDueOn(x, day))
                 .ToList();
             return due.Count > 0 && due.All(x => IsDoneOn(x, day));

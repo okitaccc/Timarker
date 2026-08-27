@@ -110,7 +110,7 @@ public sealed class TagEditor : UserControl
                 Height = 28,
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(232, 240, 255),
-                ForeColor = Color.FromArgb(37, 99, 235),
+                ForeColor = UiTokens.Primary,
                 Margin = new Padding(0, 0, 6, 6)
             };
             chip.FlatAppearance.BorderSize = 0;

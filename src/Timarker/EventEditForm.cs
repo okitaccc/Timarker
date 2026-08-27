@@ -4,11 +4,11 @@ namespace Timarker;
 
 public sealed class EventEditForm : Form
 {
-    private static readonly Color AppBack = Color.FromArgb(246, 247, 251);
-    private static readonly Color TextMain = Color.FromArgb(31, 41, 55);
-    private static readonly Color TextMuted = Color.FromArgb(100, 116, 139);
-    private static readonly Color Accent = Color.FromArgb(37, 99, 235);
-    private static readonly Color Border = Color.FromArgb(226, 232, 240);
+    private static Color AppBack => AppTheme.AppBack;
+    private static Color TextMain => AppTheme.Text;
+    private static Color TextMuted => AppTheme.Muted;
+    private static Color Accent => UiTokens.Primary;
+    private static Color Border => AppTheme.Border;
     private readonly EventItem _item;
     private readonly bool _projectStep;
     private readonly ModernTextBox _title = new() { Dock = DockStyle.Fill };
@@ -40,10 +40,15 @@ public sealed class EventEditForm : Form
     private readonly ModernNumericUpDown _reminderRepeatMinutes = ReminderBox(365, 10, 1);
     private readonly ComboBox _reminderRepeatUnit = new ModernComboBox { Width = 72 };
     private readonly ModernNumericUpDown _reminderRepeatCount = ReminderBox(20);
+    private readonly CheckBox _reminderRepeatEnabled = new() { Text = "再次提醒", AutoSize = true };
+    private readonly CheckBox _reminderEnabled = new() { Text = "需要提醒", AutoSize = true };
     private Control? _occasionPanel;
     private Control? _birthdayPanel;
     private Control? _anniversaryPanel;
+    private Label? _anniversarySection;
     private Control? _repeatPanel;
+    private string _baseline = "";
+    private bool _allowClose;
 
     public EventEditForm(EventItem item, bool projectStep = false)
     {
@@ -54,19 +59,37 @@ public sealed class EventEditForm : Form
         Height = 780;
         MinimumSize = new Size(620, 680);
         StartPosition = FormStartPosition.CenterParent;
-        Font = new Font("Microsoft YaHei UI", 9F);
+        Font = UiTokens.Font();
         BackColor = AppBack;
 
         BuildUi();
         LoadItem();
         L.Apply(this);
+        _baseline = Fingerprint();
+    }
+
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        if (!_allowClose && DialogResult != DialogResult.OK && Fingerprint() != _baseline)
+        {
+            var result = MessageBox.Show("事件有尚未保存的修改。是否保存后关闭？", "保存事件修改", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+            if (result == DialogResult.Cancel) e.Cancel = true;
+            else if (result == DialogResult.Yes)
+            {
+                e.Cancel = true;
+                BeginInvoke((MethodInvoker)SaveAndClose);
+            }
+            else _allowClose = true;
+        }
+        base.OnFormClosing(e);
     }
 
     private void BuildUi()
     {
-        AddOption(_type, "到点开始", EventType.StartAt);
+        AddOption(_type, "一次性事项", EventType.StartAt);
         AddOption(_type, "截止事项", EventType.Deadline);
         AddOption(_type, "时间段", EventType.TimeWindow);
+        AddOption(_type, "当天内完成", EventType.AnytimeToday);
         if (!_projectStep)
         {
             AddOption(_type, "周期事项", EventType.Recurring);
@@ -98,7 +121,7 @@ public sealed class EventEditForm : Form
         }
         foreach (var control in new Control[] { _title, _notes, _type, _status, _subjectName, _relationship, _birthdayCalendar, _birthdayLeapDayRule, _anniversaryMode, _milestoneDays })
         {
-            control.BackColor = Color.White;
+            control.BackColor = UiTokens.Surface;
             if (control is ComboBox combo) combo.FlatStyle = FlatStyle.Flat;
         }
         _dateRange.FlatStyle = FlatStyle.Flat;
@@ -125,7 +148,7 @@ public sealed class EventEditForm : Form
         header.Controls.Add(new Label { Text = _projectStep ? "步骤会同步显示在时间线、日历与提醒中。" : "修改后会同步更新日历、收藏夹与提醒。", Dock = DockStyle.Fill, ForeColor = TextMuted });
         shell.Controls.Add(header, 0, 0);
 
-        var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = Color.White, Padding = new Padding(22, 12, 22, 18) };
+        var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = UiTokens.Surface, Padding = new Padding(22, 12, 22, 18) };
         var form = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
@@ -134,7 +157,7 @@ public sealed class EventEditForm : Form
             ColumnCount = 1,
             RowCount = 0,
             Margin = Padding.Empty,
-            BackColor = Color.White
+            BackColor = UiTokens.Surface
         };
         form.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
@@ -168,7 +191,7 @@ public sealed class EventEditForm : Form
         AddField(form, "自定义词条", _tags);
         AddField(form, "备注", _notes);
 
-        AddSection(form, "纪念日设置");
+        _anniversarySection = AddSection(form, "纪念日设置");
         _anniversaryPanel = TwoFields(("显示方式", (Control)_anniversaryMode), ("里程碑天数", _milestoneDays));
         AddWide(form, _anniversaryPanel);
 
@@ -189,6 +212,8 @@ public sealed class EventEditForm : Form
         _type.SelectedIndexChanged += (_, _) => UpdateAnniversaryControls();
         _birthdayCalendar.SelectedIndexChanged += (_, _) => UpdateAnniversaryControls();
         _dateRange.Click += (_, _) => OpenDateRangePicker();
+        _reminderRepeatEnabled.CheckedChanged += (_, _) => UpdateReminderRepeatControls();
+        _reminderEnabled.CheckedChanged += (_, _) => UpdateReminderControls();
 
         AcceptButton = save;
         CancelButton = cancel;
@@ -219,6 +244,10 @@ public sealed class EventEditForm : Form
         SetReminderDuration(_reminderLead, _reminderLeadUnit, _item.ReminderLeadMinutes);
         SetReminderDuration(_reminderRepeatMinutes, _reminderRepeatUnit, _item.ReminderRepeatMinutes);
         _reminderRepeatCount.Value = Math.Min(_reminderRepeatCount.Maximum, Math.Max(_reminderRepeatCount.Minimum, _item.ReminderRepeatCount));
+        _reminderRepeatEnabled.Checked = _item.ReminderRepeatCount > 0;
+        _reminderEnabled.Checked = _item.ReminderEnabled;
+        UpdateReminderControls();
+        UpdateReminderRepeatControls();
         SetEnabled([_startDate, _startHour, _startMinute], _hasStart.Checked);
         SetEnabled([_deadlineDate, _deadlineHour, _deadlineMinute], _hasDeadline.Checked);
         UpdateAnniversaryControls();
@@ -249,7 +278,7 @@ public sealed class EventEditForm : Form
             MessageBox.Show("截止时间不能早于开始时间。", "时间设置有误", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
-        if (selectedType is EventType.Recurring or EventType.Habit
+        if (selectedType is EventType.Recurring or EventType.Habit or EventType.AnytimeToday
             && !_recurrence.ApplyTo(_item, startAt, out var recurrenceError))
         {
             MessageBox.Show(recurrenceError, "重复规则有误", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -262,7 +291,7 @@ public sealed class EventEditForm : Form
         _item.Categories = "";
         _item.Type = selectedType;
         _item.Status = SelectedValue<EventStatus>(_status);
-        if (_item.Type is not (EventType.Recurring or EventType.Habit)) _item.RepeatUnit = RepeatUnit.None;
+        if (_item.Type is not (EventType.Recurring or EventType.Habit or EventType.AnytimeToday)) _item.RepeatUnit = RepeatUnit.None;
         _item.AnniversaryMode = SelectedValue<AnniversaryMode>(_anniversaryMode);
         _item.MilestoneDays = _milestoneDays.Text.Trim();
         _item.SubjectName = _subjectName.Text.Trim();
@@ -274,8 +303,9 @@ public sealed class EventEditForm : Form
         _item.StartAt = startAt;
         _item.DeadlineAt = deadlineAt;
         _item.ReminderLeadMinutes = ReminderMinutes(_reminderLead, _reminderLeadUnit);
+        _item.ReminderEnabled = _reminderEnabled.Checked;
         _item.ReminderRepeatMinutes = ReminderMinutes(_reminderRepeatMinutes, _reminderRepeatUnit);
-        _item.ReminderRepeatCount = (int)_reminderRepeatCount.Value;
+        _item.ReminderRepeatCount = _reminderRepeatEnabled.Checked ? (int)_reminderRepeatCount.Value : 0;
         if (_item.Type is EventType.Anniversary)
         {
             _item.DeadlineAt = null;
@@ -304,8 +334,20 @@ public sealed class EventEditForm : Form
         }
         _item.NormalizeAfterLoad();
         _item.UpdatedAt = DateTime.Now;
+        _allowClose = true;
         DialogResult = DialogResult.OK;
     }
+
+    private string Fingerprint() => string.Join('|',
+        _title.Text, _notes.Text, _tags.TextValue, _categories.SelectedText,
+        _type.SelectedIndex, _status.SelectedIndex, _recurrence.StateFingerprint(),
+        _subjectName.Text, _relationship.Text, _birthdayCalendar.SelectedIndex,
+        _birthdayLeapDayRule.SelectedIndex, _birthdayYearKnown.Checked, _birthdayIsLeapMonth.Checked,
+        _anniversaryMode.SelectedIndex, _milestoneDays.Text,
+        _hasStart.Checked, _startDate.Value.Date.Ticks, _startHour.Value, _startMinute.Value,
+        _hasDeadline.Checked, _deadlineDate.Value.Date.Ticks, _deadlineHour.Value, _deadlineMinute.Value,
+        _reminderLead.Value, _reminderLeadUnit.SelectedIndex, _reminderRepeatEnabled.Checked, _reminderRepeatMinutes.Value,
+        _reminderRepeatUnit.SelectedIndex, _reminderRepeatCount.Value, _reminderEnabled.Checked);
 
     private static Label Label(string text) => new()
     {
@@ -314,18 +356,20 @@ public sealed class EventEditForm : Form
         Margin = new Padding(0, 8, 0, 4)
     };
 
-    private static void AddSection(TableLayoutPanel form, string text)
+    private static Label AddSection(TableLayoutPanel form, string text)
     {
         var row = form.RowCount++;
         form.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        form.Controls.Add(new Label
+        var label = new Label
         {
             Text = text,
             AutoSize = true,
-            Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Bold),
+            Font = UiTokens.Font(UiTokens.TextEmphasis, FontStyle.Bold),
             ForeColor = TextMain,
             Margin = new Padding(0, row == 0 ? 2 : 16, 0, 8)
-        }, 0, row);
+        };
+        form.Controls.Add(label, 0, row);
+        return label;
     }
 
     private static void AddField(TableLayoutPanel form, string label, Control control)
@@ -365,17 +409,16 @@ public sealed class EventEditForm : Form
 
     private static Button ActionButton(string text, bool primary)
     {
-        var button = new Button
+        var button = new ModernButton
         {
             Text = text,
             Width = primary ? 104 : 84,
             Height = 36,
-            BackColor = primary ? Accent : Color.White,
+            BackColor = primary ? Accent : UiTokens.Surface,
             ForeColor = primary ? Color.White : TextMain,
             FlatStyle = FlatStyle.Flat,
             Margin = new Padding(8, 0, 0, 0)
         };
-        button.FlatAppearance.BorderSize = primary ? 0 : 1;
         button.FlatAppearance.BorderColor = Border;
         return button;
     }
@@ -413,8 +456,8 @@ public sealed class EventEditForm : Form
 
     private void RefreshDateRangeText()
     {
-        var start = $"{_startDate.Value:yyyy-MM-dd} {LunarDate.FullText(_startDate.Value)}";
-        var end = $"{_deadlineDate.Value:yyyy-MM-dd} {LunarDate.FullText(_deadlineDate.Value)}";
+        var start = $"{_startDate.Value:yyyy-MM-dd} {LunarDate.FullText(_startDate.Value)}  {_startHour.Value:00}:{_startMinute.Value:00}";
+        var end = $"{_deadlineDate.Value:yyyy-MM-dd} {LunarDate.FullText(_deadlineDate.Value)}  {_deadlineHour.Value:00}:{_deadlineMinute.Value:00}";
         _dateRange.Text = (_hasStart.Checked, _hasDeadline.Checked) switch
         {
             (true, true) => $"{start}  →  {end}",
@@ -433,17 +476,48 @@ public sealed class EventEditForm : Form
 
     private Control ReminderPanel()
     {
-        var panel = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
-        panel.Controls.Add(Label("提前"));
-        panel.Controls.Add(_reminderLead);
-        panel.Controls.Add(_reminderLeadUnit);
-        panel.Controls.Add(Label("；每"));
-        panel.Controls.Add(_reminderRepeatMinutes);
-        panel.Controls.Add(_reminderRepeatUnit);
-        panel.Controls.Add(Label("再提醒，最多"));
-        panel.Controls.Add(_reminderRepeatCount);
-        panel.Controls.Add(Label("次"));
+        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 4, RowCount = 5, Margin = Padding.Empty };
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 88));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        panel.Controls.Add(_reminderEnabled, 0, 0);
+        panel.SetColumnSpan(_reminderEnabled, 4);
+        AddReminderRow(panel, 1, "提前提醒", _reminderLead, _reminderLeadUnit);
+        panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        panel.Controls.Add(_reminderRepeatEnabled, 0, 2);
+        panel.SetColumnSpan(_reminderRepeatEnabled, 4);
+        AddReminderRow(panel, 3, "提醒间隔", _reminderRepeatMinutes, _reminderRepeatUnit);
+        AddReminderRow(panel, 4, "最多提醒", _reminderRepeatCount, ReminderLabel("次"));
         return panel;
+    }
+
+    private static Label ReminderLabel(string text) => new() { Text = text, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Margin = Padding.Empty };
+
+    private static void AddReminderRow(TableLayoutPanel panel, int row, string label, Control value, Control unit)
+    {
+        panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        panel.Controls.Add(ReminderLabel(label), 0, row);
+        panel.Controls.Add(value, 1, row);
+        unit.Anchor = AnchorStyles.Left;
+        panel.Controls.Add(unit, 2, row);
+    }
+
+    private void UpdateReminderRepeatControls()
+    {
+        var enabled = !_reminderEnabled.Visible || _reminderEnabled.Checked;
+        _reminderRepeatMinutes.Enabled = enabled && _reminderRepeatEnabled.Checked;
+        _reminderRepeatUnit.Enabled = enabled && _reminderRepeatEnabled.Checked;
+        _reminderRepeatCount.Enabled = enabled && _reminderRepeatEnabled.Checked;
+    }
+
+    private void UpdateReminderControls()
+    {
+        var enabled = !_reminderEnabled.Visible || _reminderEnabled.Checked;
+        _reminderLead.Enabled = enabled;
+        _reminderLeadUnit.Enabled = enabled;
+        _reminderRepeatEnabled.Enabled = enabled;
+        UpdateReminderRepeatControls();
     }
 
     private static ModernNumericUpDown NumberBox(int max) => new()
@@ -518,7 +592,10 @@ public sealed class EventEditForm : Form
         if (_occasionPanel is not null) _occasionPanel.Visible = birthday || anniversary;
         if (_birthdayPanel is not null) _birthdayPanel.Visible = birthday;
         if (_anniversaryPanel is not null) _anniversaryPanel.Visible = anniversary;
-        if (_repeatPanel is not null) _repeatPanel.Visible = type is EventType.Recurring or EventType.Habit;
+        if (_anniversarySection is not null) _anniversarySection.Visible = anniversary;
+        if (_repeatPanel is not null) _repeatPanel.Visible = type is EventType.Recurring or EventType.Habit or EventType.AnytimeToday;
+        _reminderEnabled.Visible = true;
+        UpdateReminderControls();
         _birthdayYearKnown.Visible = birthday;
         _birthdayIsLeapMonth.Visible = birthday;
         _birthdayIsLeapMonth.Enabled = birthday && SelectedValue<CalendarKind>(_birthdayCalendar) is CalendarKind.Lunar;
